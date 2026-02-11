@@ -1,0 +1,190 @@
+{
+  "last_updated": "2026-02-11T00:00:00.000Z",
+  "summary": {
+    "total_files": 12,
+    "phase1_videos": {
+      "count": 1,
+      "total_lessons": 35,
+      "total_hours": "16 hrs 49 min",
+      "total_topics": 8
+    },
+    "phase1_voice_notes": {
+      "count": 1,
+      "files": ["phase1-motivation.mp3"]
+    },
+    "phase2_roadmaps": {
+      "count": 3,
+      "files": [
+        "David_Research_Roadmap_Document.pdf",
+        "Harshal_Research_Roadmap.pdf",
+        "Roadmap_Document_Sanket.pdf"
+      ]
+    },
+    "phase2_topics": {
+      "count": 1,
+      "categories": 11,
+      "subtopics": 43
+    },
+    "phase2_voice_notes": {
+      "count": 1,
+      "files": ["phase2-motivation.mp3"]
+    },
+    "manuscript_templates": {
+      "count": 1
+    },
+    "sample_papers": {
+      "count": 3,
+      "files": [
+        "BiasMix_Finance__Post_Generation_KYC_Guardrails_for_LLM_Portfolio_Advice_v1.pdf",
+        "2504.07989v2.pdf",
+        "2409.04808v1.pdf"
+      ]
+    },
+    "tools": {
+      "count": 1
+    }
+  },
+  "files": [
+    {
+      "path": "resources/phase1-videos/video-catalog.md",
+      "type": "markdown",
+      "category": "phase1-videos",
+      "title": "Course Curriculum",
+      "metadata": {
+        "topics": 8,
+        "lessons": 35,
+        "duration": "16 hrs 49 min",
+        "topics_list": [
+          "LLM Foundations and Hands on Projects",
+          "Prompt Engineering",
+          "Agents and Langchain",
+          "Semantic Search",
+          "Retrieval Augmented Generation (RAG)",
+          "Multimodal LLMs"
+        ]
+      }
+    },
+    {
+      "path": "resources/phase1-voice-notes/phase1-motivation.mp3",
+      "type": "audio",
+      "category": "phase1-voice-notes",
+      "title": "Phase 1 Motivation",
+      "metadata": {
+        "filename": "phase1-motivation.mp3",
+        "file_size_bytes": 2337747,
+        "purpose": "motivation"
+      }
+    },
+    {
+      "path": "resources/phase2-voice-notes/phase2-motivation.mp3",
+      "type": "audio",
+      "category": "phase2-voice-notes",
+      "title": "Phase 2 Motivation",
+      "metadata": {
+        "filename": "phase2-motivation.mp3",
+        "file_size_bytes": 2313747,
+        "purpose": "motivation"
+      }
+    },
+    {
+      "path": "resources/phase2-roadmaps/David_Research_Roadmap_Document.pdf",
+      "type": "pdf",
+      "category": "phase2-roadmaps",
+      "title": "David Research Roadmap",
+      "metadata": {
+        "student": "David",
+        "file_size_bytes": 292056
+      }
+    },
+    {
+      "path": "resources/phase2-roadmaps/Harshal_Research_Roadmap.pdf",
+      "type": "pdf",
+      "category": "phase2-roadmaps",
+      "title": "Harshal Research Roadmap",
+      "metadata": {
+        "student": "Harshal",
+        "file_size_bytes": 180860
+      }
+    },
+    {
+      "path": "resources/phase2-roadmaps/Roadmap_Document_Sanket.pdf",
+      "type": "pdf",
+      "category": "phase2-roadmaps",
+      "title": "Sanket Research Roadmap",
+      "metadata": {
+        "student": "Sanket",
+        "file_size_bytes": 439712
+      }
+    },
+    {
+      "path": "resources/phase2-topics/topics.md",
+      "type": "markdown",
+      "category": "phase2-topics",
+      "title": "Proposed Research & Project Topics",
+      "metadata": {
+        "categories": 11,
+        "subtopics": 43,
+        "category_list": [
+          "Healthcare & Biomedical AI",
+          "Finance & Business Intelligence",
+          "Education & Adaptive Learning",
+          "Agentic AI & Multi-Agent Systems",
+          "Creative & Entertainment AI",
+          "Legal & Governance",
+          "Multimodal & Frontier AI Applications",
+          "AI Safety, Evaluation & Responsible AI",
+          "Infrastructure & Production Systems",
+          "Domain-Specific Applied AI",
+          "Emerging & Frontier Topics"
+        ]
+      }
+    },
+    {
+      "path": "resources/manuscript-templates/overleaf-template/Links-to-template.md",
+      "type": "link",
+      "category": "manuscript-templates",
+      "title": "Overleaf arXiv Template",
+      "metadata": {
+        "url": "https://www.overleaf.com/latex/templates/style-and-template-for-preprints-arxiv-bio-arxiv/pkzcrhzcdxmc"
+      }
+    },
+    {
+      "path": "resources/sample-papers/BiasMix_Finance__Post_Generation_KYC_Guardrails_for_LLM_Portfolio_Advice_v1.pdf",
+      "type": "pdf",
+      "category": "sample-papers",
+      "title": "BiasMix Finance: Post-Generation KYC Guardrails for LLM Portfolio Advice",
+      "metadata": {
+        "file_size_bytes": 452795
+      }
+    },
+    {
+      "path": "resources/sample-papers/2504.07989v2.pdf",
+      "type": "pdf",
+      "category": "sample-papers",
+      "title": "arXiv Paper 2504.07989v2",
+      "metadata": {
+        "arxiv_id": "2504.07989v2",
+        "file_size_bytes": 2537574
+      }
+    },
+    {
+      "path": "resources/sample-papers/2409.04808v1.pdf",
+      "type": "pdf",
+      "category": "sample-papers",
+      "title": "arXiv Paper 2409.04808v1",
+      "metadata": {
+        "arxiv_id": "2409.04808v1",
+        "file_size_bytes": 1204418
+      }
+    },
+    {
+      "path": "resources/tools/pdf-to-colab/Link-to-tool.md",
+      "type": "link",
+      "category": "tools",
+      "title": "PDF-to-Colab Tool",
+      "metadata": {
+        "url": "https://paper-to-notebook-production.up.railway.app/"
+      }
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "structure": {
+    "header": {
+      "title": "[Duration]-Week Research Roadmap",
+      "subtitle": "[Research Topic]",
+      "preparedFor": "[Student Name]",
+      "date": "[Current Date]"
+    },
+    "sections": [
+      {
+        "name": "Abstract",
+        "description": "1 paragraph describing the concrete plan, primary dataset/method, metrics, deliverables, and target output.",
+        "required": true
+      },
+      {
+        "name": "Scope & Research Questions",
+        "description": "Goal statement (1-2 sentences) and 3-4 core research questions (specific, measurable)",
+        "required": true
+      },
+      {
+        "name": "Primary Dataset / Corpus",
+        "description": "Specify the exact dataset to use. Optional validation sets for stress-tests only. Dataset is FIXED upfront - no scope creep.",
+        "required": true
+      },
+      {
+        "name": "Milestones",
+        "description": "4-5 milestones of 2 weeks each, totaling 8-12 weeks",
+        "required": true
+      },
+      {
+        "name": "Appendices",
+        "description": "Excel columns, metrics definitions, file/folder layout",
+        "required": false
+      }
+    ]
+  },
+  "milestoneTemplate": {
+    "components": [
+      "Objectives (2-3 bullet points)",
+      "Concrete Steps (numbered, specific)",
+      "Deliverables (specific files/documents)",
+      "Acceptance Checks (how to verify completion)",
+      "Risks & Mitigations"
+    ]
+  },
+  "standardMilestones": [
+    {
+      "number": 1,
+      "weeks": "1-2",
+      "title": "Literature Review & Foundations",
+      "standardComponents": [
+        "Core Reading List (12-15 papers with titles and years)",
+        "Excel Tracking requirement (15+ additional papers)",
+        "Excel columns: Paper Title, Year, Venue, Problem/Task, Dataset(s), Method Summary, Key Metrics, Key Results, Limitations, Relevance 1-5",
+        "Deliverables: review memo, completed Excel"
+      ]
+    },
+    {
+      "number": 2,
+      "weeks": "3-4",
+      "title": "Dataset Collection & Implementation Setup",
+      "standardComponents": [
+        "Dataset preprocessing steps",
+        "Baseline implementation",
+        "Evaluation framework setup",
+        "Deliverables: processed dataset, working baseline, evaluation scripts"
+      ]
+    },
+    {
+      "number": 3,
+      "weeks": "5-6",
+      "title": "Core Experiments & Analysis",
+      "standardComponents": [
+        "Exact experiments/ablations enumerated (A1, A2, A3...)",
+        "Implementation notes",
+        "Deliverables: CSV files, notebooks, figures"
+      ]
+    },
+    {
+      "number": 4,
+      "weeks": "7-8",
+      "title": "Evaluation & Results",
+      "standardComponents": [
+        "Primary Metrics (with formal definitions)",
+        "Visualizations required",
+        "Deliverables: results/, figures/, tables/"
+      ]
+    },
+    {
+      "number": 5,
+      "weeks": "9-10",
+      "title": "Manuscript Writing",
+      "standardComponents": [
+        "Follow Overleaf template",
+        "Use sample papers as reference",
+        "Target workshop-quality manuscript"
+      ],
+      "note": "We will guide you for this when you come to this stage"
+    }
+  ],
+  "appendixTemplates": {
+    "excelColumns": [
+      "Paper Title",
+      "Year",
+      "Venue",
+      "Problem/Task",
+      "Dataset(s)",
+      "Method Summary",
+      "Key Metrics",
+      "Key Results",
+      "Limitations",
+      "Relevance (1-5)"
+    ],
+    "folderStructure": [
+      "data/",
+      "  raw/",
+      "  processed/",
+      "notebooks/",
+      "  exploration/",
+      "  experiments/",
+      "src/",
+      "  models/",
+      "  evaluation/",
+      "  utils/",
+      "results/",
+      "  figures/",
+      "  tables/",
+      "manuscript/",
+      "references/"
+    ]
+  },
+  "principles": [
+    "Every milestone has: Objectives, Concrete Steps, Deliverables, Acceptance Checks, Risks & Mitigations",
+    "Datasets are FIXED upfront - no scope creep",
+    "Ablation studies are enumerated explicitly (A1, A2, A3...)",
+    "Metrics are defined formally with mathematical notation",
+    "File/folder layouts are specified",
+    "Durations are 8-12 weeks with 4-5 milestones of 2 weeks each",
+    "Suitable for execution by a single researcher",
+    "Target: workshop-quality manuscript"
+  ]
+}

@@ -1,0 +1,17 @@
+# Generative AI Agent ignores
+node_modules/
+.npm-cache/
+.env
+.env.local
+.env.production
+.next/
+dist/
+*.mp3
+*.m4a
+*.wav
+data/*.db
+.DS_Store
+tsconfig.tsbuildinfo
+test-results/
+playwright-report/
+
