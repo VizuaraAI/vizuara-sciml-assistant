@@ -1,11 +1,12 @@
 /**
  * Streaming Roadmap Generation API using Gemini 2.5 Pro
  * Uses Server-Sent Events to stream thinking tokens and progress
- * PDFs are generated using pdfkit and stored in Supabase Storage
+ * PDFs are generated using pdf-lib (serverless-compatible) and stored in Supabase Storage
  */
 
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { getResearchTopic } from '@/services/resources';
 
 const supabase = createClient(
@@ -18,15 +19,15 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyCxs_tn_dxb_sQRHNAa0r
 const GEMINI_MODEL = 'gemini-2.5-pro';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent`;
 
-// Token limits
-const MAX_TOKENS_ROADMAP = 32768;
+// Token limits - increased for comprehensive roadmap
+const MAX_TOKENS_ROADMAP = 65536;
 
-// Roadmap generation prompt (same as in roadmap.ts)
+// Roadmap generation prompt
 const ROADMAP_SYSTEM_PROMPT = `You are an expert research mentor who creates detailed, actionable research roadmaps. You have deep expertise in machine learning, NLP, and AI research methodology.`;
 
 const ROADMAP_GENERATION_PROMPT = `You are generating a DETAILED research roadmap for a student. The output must be DENSE and SPECIFIC - every section should read as if written by a domain expert mentor.
 
-## CRITICAL: The #1 problem to avoid is generating thin, generic content.
+## CRITICAL: The #1 problem to avoid is generating thin, generic content. This roadmap should be 15-17 pages when rendered as a PDF.
 
 Return ONLY valid JSON (no markdown, no code blocks) matching this structure:
 
@@ -69,7 +70,7 @@ Return ONLY valid JSON (no markdown, no code blocks) matching this structure:
       ],
       "reading_list": [
         "Author1 et al. (Year). Full Paper Title. Conference/Journal.",
-        "<Include 10-15 REAL, WELL-KNOWN papers. These MUST be actual papers that exist.>",
+        "<Include 12-15 REAL, WELL-KNOWN papers. These MUST be actual papers that exist.>",
         "<Mix foundational papers with recent state-of-the-art>",
         "<Include the seminal papers in this field>"
       ],
@@ -86,6 +87,7 @@ Return ONLY valid JSON (no markdown, no code blocks) matching this structure:
         "literature_review/papers.xlsx with 15+ detailed summaries",
         "literature_review/comparison_table.xlsx"
       ],
+      "acceptance_check": "Literature review memo submitted with comparison table",
       "risks": [
         {"risk": "Spending too much time on tangential papers", "mitigation": "Set strict 2-hour limit per paper; use abstract/conclusion first to filter"},
         {"risk": "Missing key recent papers", "mitigation": "Check citations of 2023-2024 survey papers; use Semantic Scholar alerts"}
@@ -95,88 +97,190 @@ Return ONLY valid JSON (no markdown, no code blocks) matching this structure:
       "number": 2,
       "weeks": "3–4",
       "title": "Data/Environment Setup & Baselines",
-      "objectives": ["Set up reproducible development environment", "Download and preprocess primary dataset", "Implement 2 baseline methods"],
-      "tasks": ["1. Create conda environment", "2. Download dataset", "3. Write data_loader.py", "4. Implement baselines"],
-      "deliverables": ["environment.yml", "data/README.md", "src/baselines/"],
-      "acceptance_check": "Both baselines run end-to-end with logged metrics",
-      "risks": [{"risk": "Dataset too large", "mitigation": "Use subset for dev"}]
+      "objectives": [
+        "Set up reproducible development environment with all dependencies",
+        "Download and preprocess primary dataset with proper train/val/test splits",
+        "Implement 2-3 baseline methods from literature"
+      ],
+      "tasks": [
+        "1. Create conda/venv environment with requirements.txt",
+        "2. Download primary dataset and validate checksums",
+        "3. Write data_loader.py with proper preprocessing",
+        "4. Implement Baseline 1: [Simple heuristic or classical method]",
+        "5. Implement Baseline 2: [Standard neural approach]",
+        "6. Log all baseline results to CSV"
+      ],
+      "deliverables": [
+        "environment.yml or requirements.txt",
+        "data/README.md with dataset documentation",
+        "src/baselines/ with baseline implementations",
+        "results/baselines.csv with initial metrics"
+      ],
+      "acceptance_check": "Both baselines run end-to-end with logged metrics matching paper benchmarks within 5%",
+      "risks": [
+        {"risk": "Dataset too large for local development", "mitigation": "Use 10% subset for dev; full data only for final runs"},
+        {"risk": "Dependency conflicts", "mitigation": "Use Docker or strict version pinning"}
+      ]
     },
     {
       "number": 3,
       "weeks": "5–6",
       "title": "Core Experiments & Ablations",
-      "objectives": ["Implement proposed method", "Run systematic ablation studies"],
-      "ablations": [
-        {"id": "A1", "factor": "Model size", "levels": "7B, 13B, 30B"},
-        {"id": "A2", "factor": "Prompting strategy", "levels": "zero-shot, 1-shot, 3-shot, 5-shot"},
-        {"id": "A3", "factor": "Decoding method", "levels": "greedy, temperature sampling"},
-        {"id": "A4", "factor": "Context length", "levels": "512, 1024, 2048 tokens"}
+      "objectives": [
+        "Implement proposed method with clean, documented code",
+        "Run systematic ablation studies across key hyperparameters",
+        "Document all experimental findings"
       ],
-      "implementation_notes": ["Use random seeds {42, 123, 456}", "Cache embeddings", "Log to wandb"],
-      "tasks": ["1. Implement core method", "2. Run ablation grid", "3. Log all results"],
-      "deliverables": ["src/models/main_model.py", "results/ablations/"],
-      "risks": [{"risk": "GPU OOM", "mitigation": "Use gradient checkpointing"}]
+      "ablations": [
+        {"id": "A1", "factor": "Model size", "levels": "7B, 13B, 30B (if applicable)"},
+        {"id": "A2", "factor": "Prompting strategy", "levels": "zero-shot, 1-shot, 3-shot, 5-shot"},
+        {"id": "A3", "factor": "Decoding method", "levels": "greedy, temperature=0.7, nucleus p=0.9"},
+        {"id": "A4", "factor": "Context length", "levels": "512, 1024, 2048 tokens"},
+        {"id": "A5", "factor": "Key component ablation", "levels": "with/without [specific component]"}
+      ],
+      "implementation_notes": [
+        "Use random seeds {42, 123, 456} for all experiments",
+        "Cache embeddings/intermediate results to speed up reruns",
+        "Log all runs to wandb/tensorboard for visualization",
+        "Save model checkpoints every N steps"
+      ],
+      "tasks": [
+        "1. Implement core method in src/models/",
+        "2. Write experiment runner with config files",
+        "3. Run ablation grid (A1-A5)",
+        "4. Analyze results and identify best configuration",
+        "5. Document findings in experiments.md"
+      ],
+      "deliverables": [
+        "src/models/main_model.py",
+        "configs/ with experiment configurations",
+        "results/ablations/ with all ablation results",
+        "experiments.md with analysis"
+      ],
+      "acceptance_check": "All ablations complete with results logged; best config identified",
+      "risks": [
+        {"risk": "GPU OOM errors", "mitigation": "Use gradient checkpointing, reduce batch size, or use smaller model"},
+        {"risk": "Experiments taking too long", "mitigation": "Run on subset first; parallelize across GPUs"}
+      ]
     },
     {
       "number": 4,
       "weeks": "7–8",
       "title": "Evaluation & Analysis",
-      "objectives": ["Run final experiments", "Compute metrics with confidence intervals", "Generate figures"],
+      "objectives": [
+        "Run final experiments with best configuration",
+        "Compute all metrics with confidence intervals",
+        "Generate publication-quality figures and tables"
+      ],
       "metrics": [
         {"name": "Accuracy", "definition": "Accuracy = (TP + TN) / (TP + TN + FP + FN)"},
-        {"name": "Macro-F1", "definition": "F1_macro = (1/C) * sum F1_c"},
-        {"name": "BLEU-4", "definition": "BLEU = BP * exp(sum w_n * log(p_n))"}
+        {"name": "Macro-F1", "definition": "F1_macro = (1/C) * Σ F1_c for each class c"},
+        {"name": "Precision@K", "definition": "P@K = |relevant ∩ retrieved@K| / K"},
+        {"name": "BLEU-4", "definition": "BLEU = BP × exp(Σ wn log pn) with brevity penalty"},
+        {"name": "ROUGE-L", "definition": "ROUGE-L = F-measure based on LCS"}
       ],
-      "visualizations": ["Figure 1: Bar chart with CI", "Figure 2: Ablation heatmap", "Figure 3: Learning curves"],
-      "tasks": ["1. Run final experiments", "2. Compute bootstrap CIs", "3. Generate figures"],
-      "deliverables": ["results/final_results.csv", "figures/*.pdf", "tables/*.tex"],
-      "risks": [{"risk": "Results not significant", "mitigation": "Report effect sizes"}]
+      "visualizations": [
+        "Figure 1: Main results bar chart with 95% CI error bars",
+        "Figure 2: Ablation study heatmap",
+        "Figure 3: Learning curves (loss/metric vs steps)",
+        "Figure 4: Qualitative examples (success and failure cases)",
+        "Figure 5: Confusion matrix or error analysis"
+      ],
+      "tasks": [
+        "1. Run final experiments with 3 random seeds",
+        "2. Compute bootstrap confidence intervals",
+        "3. Generate all figures using matplotlib/seaborn",
+        "4. Create LaTeX tables for results",
+        "5. Conduct error analysis on failure cases"
+      ],
+      "deliverables": [
+        "results/final_results.csv",
+        "figures/*.pdf (publication-quality)",
+        "tables/*.tex (LaTeX-ready)",
+        "analysis/error_analysis.md"
+      ],
+      "acceptance_check": "All figures/tables ready for manuscript; statistical significance verified",
+      "risks": [
+        {"risk": "Results not statistically significant", "mitigation": "Report effect sizes; consider additional experiments"},
+        {"risk": "Unexpected negative results", "mitigation": "Pivot to analysis paper; investigate why method fails"}
+      ]
     },
     {
       "number": 5,
       "weeks": "9–10",
-      "title": "Manuscript Writing",
-      "objectives": ["Write complete manuscript", "Prepare code release"],
-      "sections": ["Abstract (150-250 words)", "Introduction", "Related Work", "Methods", "Experiments", "Conclusion"],
-      "tasks": ["1. Create Overleaf project", "2. Draft each section", "3. Integrate figures", "4. Prepare GitHub repo"],
-      "deliverables": ["manuscript/main.pdf", "GitHub repository", "README.md"],
-      "risks": [{"risk": "Manuscript too long", "mitigation": "Move details to appendix"}]
+      "title": "Manuscript Writing & Submission",
+      "objectives": [
+        "Write complete manuscript following venue guidelines",
+        "Prepare code release and documentation",
+        "Submit to target venue"
+      ],
+      "sections": [
+        "Abstract (150-250 words): Problem, method, key results, impact",
+        "Introduction (1-1.5 pages): Motivation, problem statement, contributions",
+        "Related Work (1 page): Position paper in literature landscape",
+        "Methods (2-3 pages): Detailed approach with equations/algorithms",
+        "Experiments (2-3 pages): Setup, results, ablations, analysis",
+        "Conclusion (0.5 pages): Summary, limitations, future work"
+      ],
+      "tasks": [
+        "1. Create Overleaf project with venue template",
+        "2. Draft each section following guidelines",
+        "3. Integrate figures and tables",
+        "4. Write clear, reproducible experimental setup",
+        "5. Prepare GitHub repo with clean code and README",
+        "6. Internal review and revision",
+        "7. Submit to target venue"
+      ],
+      "deliverables": [
+        "manuscript/main.pdf (camera-ready)",
+        "manuscript/supplementary.pdf (if needed)",
+        "GitHub repository with MIT license",
+        "README.md with reproduction instructions"
+      ],
+      "acceptance_check": "Manuscript submitted; code repo public with documentation",
+      "risks": [
+        {"risk": "Manuscript too long for page limit", "mitigation": "Move details to supplementary material"},
+        {"risk": "Missing deadline", "mitigation": "Set internal deadline 3 days before actual deadline"}
+      ]
     }
   ],
 
   "timeline_table": [
-    {"milestone": "M1: Literature Review", "weeks": "1–2", "deliverables": "review_memo.pdf, papers.xlsx"},
-    {"milestone": "M2: Setup & Baselines", "weeks": "3–4", "deliverables": "environment.yml, baseline_results.csv"},
-    {"milestone": "M3: Experiments", "weeks": "5–6", "deliverables": "main_model.py, ablation_results.csv"},
-    {"milestone": "M4: Evaluation", "weeks": "7–8", "deliverables": "final_results.csv, figures/*.pdf"},
-    {"milestone": "M5: Manuscript", "weeks": "9–10", "deliverables": "main.pdf, GitHub repo"}
+    {"milestone": "M1: Literature Review", "weeks": "1–2", "deliverables": "review_memo.pdf, papers.xlsx, comparison_table.xlsx"},
+    {"milestone": "M2: Setup & Baselines", "weeks": "3–4", "deliverables": "environment.yml, baselines.csv, data_loader.py"},
+    {"milestone": "M3: Experiments", "weeks": "5–6", "deliverables": "main_model.py, ablation_results.csv, experiments.md"},
+    {"milestone": "M4: Evaluation", "weeks": "7–8", "deliverables": "final_results.csv, figures/*.pdf, tables/*.tex"},
+    {"milestone": "M5: Manuscript", "weeks": "9–10", "deliverables": "main.pdf, GitHub repo, README.md"}
   ],
 
   "appendices": [
     {
       "label": "A",
       "title": "Literature Tracking Spreadsheet Columns",
-      "content": ["Paper Title", "Authors", "Year", "Venue", "Problem/Task", "Dataset(s)", "Method Summary", "Key Results", "Limitations", "Relevance (1-5)"]
+      "content": ["Paper Title", "Authors", "Year", "Venue", "Problem/Task", "Dataset(s)", "Method Summary (5-7 sentences)", "Key Metrics", "Key Results", "Limitations", "Code Available?", "Relevance (1-5)", "Notes"]
     },
     {
       "label": "B",
       "title": "Metric Definitions",
       "content": [
-        {"name": "Accuracy", "definition": "Acc = (1/N) * sum 1{y_i = y_hat_i}"},
+        {"name": "Accuracy", "definition": "Acc = (1/N) × Σ 1{ŷᵢ = yᵢ}"},
         {"name": "Precision", "definition": "P = TP / (TP + FP)"},
         {"name": "Recall", "definition": "R = TP / (TP + FN)"},
-        {"name": "F1-Score", "definition": "F1 = 2 * P * R / (P + R)"}
+        {"name": "F1-Score", "definition": "F1 = 2 × P × R / (P + R)"},
+        {"name": "Macro-F1", "definition": "F1_macro = (1/C) × Σ F1_c"},
+        {"name": "BLEU", "definition": "BLEU = BP × exp(Σ wₙ log pₙ)"},
+        {"name": "ROUGE-L", "definition": "ROUGE-L = (1+β²) × P_lcs × R_lcs / (R_lcs + β² × P_lcs)"}
       ]
     },
     {
       "label": "C",
       "title": "Project Folder Layout",
-      "content": "project-root/\\n├── data/\\n├── src/\\n├── configs/\\n├── notebooks/\\n├── results/\\n├── figures/\\n├── tables/\\n├── manuscript/\\n├── literature_review/\\n├── environment.yml\\n└── README.md"
+      "content": "project-root/\\n├── data/\\n│   ├── raw/\\n│   ├── processed/\\n│   └── README.md\\n├── src/\\n│   ├── models/\\n│   ├── baselines/\\n│   ├── utils/\\n│   └── train.py\\n├── configs/\\n├── notebooks/\\n├── results/\\n│   ├── ablations/\\n│   └── final/\\n├── figures/\\n├── tables/\\n├── manuscript/\\n├── literature_review/\\n├── environment.yml\\n├── requirements.txt\\n└── README.md"
     }
   ]
 }
 
-Make the roadmap DENSE with real papers, real datasets, and actionable guidance for the specific topic provided.`;
+Make the roadmap EXTREMELY DENSE with real papers, real datasets, and actionable guidance for the specific topic provided. Each milestone should have comprehensive details.`;
 
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
@@ -221,7 +325,7 @@ export async function POST(request: NextRequest) {
           day: 'numeric'
         });
 
-        const userPrompt = `Generate a ${durationText}-Week research roadmap for:
+        const userPrompt = `Generate a comprehensive ${durationText}-Week research roadmap for:
 
 Student Name: ${studentName || 'Student'}
 Research Topic: ${topicTitle}
@@ -229,6 +333,13 @@ Topic Description: ${topicDescription}
 Date: ${currentDate}
 
 ${customRequirements ? `Custom Requirements: ${customRequirements}` : ''}
+
+IMPORTANT: This roadmap should be VERY DETAILED - when rendered as a PDF it should be 15-17 pages. Include:
+- 12-15 REAL papers in the reading list with full citations
+- Specific, actionable tasks for each milestone
+- Detailed ablation studies with specific hyperparameters
+- Comprehensive deliverables for each milestone
+- Specific risk mitigations
 
 Follow the JSON structure EXACTLY. Include real papers, real datasets, and actionable guidance.`;
 
@@ -249,26 +360,25 @@ Follow the JSON structure EXACTLY. Include real papers, real datasets, and actio
         const milestoneCount = roadmapJson.milestones?.length || 5;
         send('status', { step: 2, message: `Found ${milestoneCount} milestones`, phase: 'parse-done' });
 
-        // Step 3: Generate downloadable document
-        send('status', { step: 3, message: 'Generating document...', phase: 'pdf' });
-        send('thinking', { text: 'Creating downloadable roadmap...' });
+        // Step 3: Generate PDF
+        send('status', { step: 3, message: 'Generating PDF document...', phase: 'pdf' });
+        send('thinking', { text: 'Creating comprehensive PDF (15-17 pages)...' });
 
         const timestamp = Date.now();
         const safeTopicName = topicTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+        const filename = `roadmap_${safeTopicName}_${timestamp}.pdf`;
 
-        // Generate as Markdown (more reliable in serverless)
-        const markdownContent = generateMarkdown(roadmapJson);
-        const filename = `roadmap_${safeTopicName}_${timestamp}.md`;
+        const pdfBytes = await generatePDF(roadmapJson);
 
-        send('status', { step: 3, message: 'Document generated, uploading...', phase: 'pdf-upload' });
+        send('status', { step: 3, message: 'PDF generated, uploading...', phase: 'pdf-upload' });
 
         // Try to upload to Supabase Storage
         let fullPdfUrl = '';
         try {
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from('roadmaps')
-            .upload(filename, markdownContent, {
-              contentType: 'text/markdown',
+            .upload(filename, pdfBytes, {
+              contentType: 'application/pdf',
               cacheControl: '3600',
               upsert: true,
             });
@@ -283,13 +393,13 @@ Follow the JSON structure EXACTLY. Include real papers, real datasets, and actio
           console.warn('Storage upload failed, using data URL fallback:', storageError);
         }
 
-        // If storage failed, create a data URL
+        // If storage failed, create a data URL for PDF
         if (!fullPdfUrl) {
-          const base64Content = Buffer.from(markdownContent).toString('base64');
-          fullPdfUrl = `data:text/markdown;base64,${base64Content}`;
+          const base64Pdf = Buffer.from(pdfBytes).toString('base64');
+          fullPdfUrl = `data:application/pdf;base64,${base64Pdf}`;
         }
 
-        send('status', { step: 3, message: 'Document generated successfully', phase: 'pdf-done' });
+        send('status', { step: 3, message: 'PDF generated successfully', phase: 'pdf-done' });
 
         // Step 4: Save to database
         send('status', { step: 4, message: 'Saving to database...', phase: 'save' });
@@ -341,7 +451,7 @@ Follow the JSON structure EXACTLY. Include real papers, real datasets, and actio
           filename,
           downloadUrl: fullPdfUrl,
           downloadLink: `[📄 Download: ${topicTitle} Roadmap](${fullPdfUrl})`,
-          message: `I've created a research roadmap for you.`,
+          message: `I've created a comprehensive research roadmap for you.`,
           milestoneCount,
           roadmapId: savedRoadmap?.id,
         });
@@ -442,141 +552,462 @@ function parseJSON(text: string): any {
   return JSON.parse(cleaned.trim());
 }
 
-function generateMarkdown(roadmapJson: any): string {
-  const lines: string[] = [];
+// PDF Generation using pdf-lib (serverless compatible)
+async function generatePDF(roadmapJson: any): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const helveticaOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-  // Title
-  lines.push(`# ${roadmapJson.title || 'Research Roadmap'}`);
-  lines.push(`## ${roadmapJson.subtitle || ''}`);
-  lines.push('');
-  lines.push(`**Researcher:** ${roadmapJson.researcher || 'Student'}`);
-  lines.push(`**Mentor:** ${roadmapJson.mentor || 'Dr. Raj Dandekar'}`);
-  lines.push(`**Date:** ${roadmapJson.date || new Date().toLocaleDateString()}`);
-  lines.push('');
-  lines.push('---');
-  lines.push('');
+  const pageWidth = 595.28; // A4 width in points
+  const pageHeight = 841.89; // A4 height in points
+  const margin = 50;
+  const contentWidth = pageWidth - 2 * margin;
+
+  let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  const black = rgb(0, 0, 0);
+  const darkGray = rgb(0.3, 0.3, 0.3);
+  const lightGray = rgb(0.5, 0.5, 0.5);
+  const accentColor = rgb(0.4, 0.2, 0.6); // Purple accent
+
+  // Helper function to add text with word wrapping
+  function drawText(text: string, x: number, fontSize: number, font: any, color: any, maxWidth: number): number {
+    const words = text.split(' ');
+    let line = '';
+    let linesDrawn = 0;
+
+    for (const word of words) {
+      const testLine = line ? `${line} ${word}` : word;
+      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+      if (testWidth > maxWidth && line) {
+        if (y < margin + 50) {
+          currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+          y = pageHeight - margin;
+        }
+        currentPage.drawText(line, { x, y, size: fontSize, font, color });
+        y -= fontSize + 4;
+        line = word;
+        linesDrawn++;
+      } else {
+        line = testLine;
+      }
+    }
+
+    if (line) {
+      if (y < margin + 50) {
+        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+      }
+      currentPage.drawText(line, { x, y, size: fontSize, font, color });
+      y -= fontSize + 4;
+      linesDrawn++;
+    }
+
+    return linesDrawn;
+  }
+
+  function checkPageBreak(neededSpace: number) {
+    if (y < margin + neededSpace) {
+      currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+      y = pageHeight - margin;
+    }
+  }
+
+  // Title Page
+  y = pageHeight - 150;
+  currentPage.drawText(roadmapJson.title || 'Research Roadmap', {
+    x: margin,
+    y,
+    size: 28,
+    font: helveticaBold,
+    color: accentColor,
+  });
+  y -= 40;
+
+  currentPage.drawText(roadmapJson.subtitle || '', {
+    x: margin,
+    y,
+    size: 18,
+    font: helvetica,
+    color: darkGray,
+  });
+  y -= 60;
+
+  currentPage.drawText(`Prepared for: ${roadmapJson.researcher || 'Student'}`, {
+    x: margin,
+    y,
+    size: 12,
+    font: helvetica,
+    color: darkGray,
+  });
+  y -= 20;
+
+  currentPage.drawText(`Mentor: ${roadmapJson.mentor || 'Dr. Raj Dandekar'}`, {
+    x: margin,
+    y,
+    size: 12,
+    font: helvetica,
+    color: darkGray,
+  });
+  y -= 20;
+
+  currentPage.drawText(`Date: ${roadmapJson.date || new Date().toLocaleDateString()}`, {
+    x: margin,
+    y,
+    size: 12,
+    font: helvetica,
+    color: darkGray,
+  });
+  y -= 60;
 
   // Abstract
   if (roadmapJson.abstract) {
-    lines.push('## Abstract');
-    lines.push('');
-    lines.push(roadmapJson.abstract);
-    lines.push('');
+    currentPage.drawText('Abstract', {
+      x: margin,
+      y,
+      size: 14,
+      font: helveticaBold,
+      color: black,
+    });
+    y -= 20;
+    drawText(roadmapJson.abstract, margin, 11, helvetica, darkGray, contentWidth);
+    y -= 20;
   }
+
+  // New page for Scope
+  currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+  y = pageHeight - margin;
 
   // Scope & Research Questions
   if (roadmapJson.scope) {
-    lines.push('## 1. Scope & Research Questions');
-    lines.push('');
+    currentPage.drawText('1. Scope & Research Questions', {
+      x: margin,
+      y,
+      size: 16,
+      font: helveticaBold,
+      color: accentColor,
+    });
+    y -= 30;
+
     if (roadmapJson.scope.goal) {
-      lines.push(`**Goal:** ${roadmapJson.scope.goal}`);
-      lines.push('');
-    }
-    if (roadmapJson.scope.questions?.length) {
-      lines.push('**Research Questions:**');
-      roadmapJson.scope.questions.forEach((q: string) => {
-        lines.push(`- ${q}`);
+      currentPage.drawText('Goal:', {
+        x: margin,
+        y,
+        size: 12,
+        font: helveticaBold,
+        color: black,
       });
-      lines.push('');
+      y -= 18;
+      drawText(roadmapJson.scope.goal, margin + 10, 11, helvetica, darkGray, contentWidth - 10);
+      y -= 15;
     }
+
+    if (roadmapJson.scope.questions?.length) {
+      currentPage.drawText('Research Questions:', {
+        x: margin,
+        y,
+        size: 12,
+        font: helveticaBold,
+        color: black,
+      });
+      y -= 18;
+
+      for (const q of roadmapJson.scope.questions) {
+        checkPageBreak(60);
+        drawText(`• ${q}`, margin + 10, 11, helvetica, darkGray, contentWidth - 20);
+        y -= 10;
+      }
+    }
+    y -= 20;
   }
 
   // Dataset
   if (roadmapJson.dataset) {
-    lines.push('## 2. Primary Dataset');
-    lines.push('');
-    lines.push(`**${roadmapJson.dataset.name || 'Dataset'}**`);
+    checkPageBreak(100);
+    currentPage.drawText('2. Primary Dataset', {
+      x: margin,
+      y,
+      size: 16,
+      font: helveticaBold,
+      color: accentColor,
+    });
+    y -= 25;
+
+    currentPage.drawText(roadmapJson.dataset.name || 'Dataset', {
+      x: margin,
+      y,
+      size: 12,
+      font: helveticaBold,
+      color: black,
+    });
+    y -= 18;
+
     if (roadmapJson.dataset.description) {
-      lines.push('');
-      lines.push(roadmapJson.dataset.description);
+      drawText(roadmapJson.dataset.description, margin + 10, 11, helvetica, darkGray, contentWidth - 10);
+      y -= 15;
     }
-    lines.push('');
+
+    if (roadmapJson.dataset.optional?.length) {
+      currentPage.drawText('Optional Validation Sets:', {
+        x: margin,
+        y,
+        size: 11,
+        font: helveticaBold,
+        color: black,
+      });
+      y -= 16;
+
+      for (const opt of roadmapJson.dataset.optional) {
+        checkPageBreak(30);
+        drawText(`• ${opt}`, margin + 10, 10, helvetica, lightGray, contentWidth - 20);
+      }
+    }
+    y -= 20;
   }
 
-  // Milestones
+  // Milestones - each on new page
   if (roadmapJson.milestones?.length) {
-    roadmapJson.milestones.forEach((milestone: any, idx: number) => {
-      lines.push(`## Milestone ${milestone.number || idx + 1}: ${milestone.title} (Weeks ${milestone.weeks || `${idx * 2 + 1}-${idx * 2 + 2}`})`);
-      lines.push('');
+    for (const milestone of roadmapJson.milestones) {
+      currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+      y = pageHeight - margin;
+
+      // Milestone header
+      currentPage.drawText(
+        `Milestone ${milestone.number}: ${milestone.title}`,
+        { x: margin, y, size: 16, font: helveticaBold, color: accentColor }
+      );
+      y -= 20;
+
+      currentPage.drawText(
+        `Weeks ${milestone.weeks}`,
+        { x: margin, y, size: 11, font: helveticaOblique, color: lightGray }
+      );
+      y -= 25;
 
       // Objectives
       if (milestone.objectives?.length) {
-        lines.push('### Objectives');
-        milestone.objectives.forEach((obj: string) => {
-          lines.push(`- ${obj}`);
+        currentPage.drawText('Objectives:', {
+          x: margin,
+          y,
+          size: 12,
+          font: helveticaBold,
+          color: black,
         });
-        lines.push('');
+        y -= 16;
+
+        for (const obj of milestone.objectives) {
+          checkPageBreak(40);
+          drawText(`• ${obj}`, margin + 10, 10, helvetica, darkGray, contentWidth - 20);
+        }
+        y -= 10;
+      }
+
+      // Reading List (for milestone 1)
+      if (milestone.reading_list?.length) {
+        checkPageBreak(50);
+        currentPage.drawText('Core Reading List:', {
+          x: margin,
+          y,
+          size: 12,
+          font: helveticaBold,
+          color: black,
+        });
+        y -= 16;
+
+        for (const paper of milestone.reading_list) {
+          checkPageBreak(35);
+          drawText(`• ${paper}`, margin + 10, 9, helvetica, darkGray, contentWidth - 20);
+        }
+        y -= 10;
       }
 
       // Tasks
       if (milestone.tasks?.length) {
-        lines.push('### Tasks');
-        milestone.tasks.forEach((task: string) => {
-          lines.push(`- ${task}`);
+        checkPageBreak(50);
+        currentPage.drawText('Tasks:', {
+          x: margin,
+          y,
+          size: 12,
+          font: helveticaBold,
+          color: black,
         });
-        lines.push('');
+        y -= 16;
+
+        for (const task of milestone.tasks) {
+          checkPageBreak(35);
+          drawText(task, margin + 10, 10, helvetica, darkGray, contentWidth - 20);
+        }
+        y -= 10;
+      }
+
+      // Ablations (if present)
+      if (milestone.ablations?.length) {
+        checkPageBreak(50);
+        currentPage.drawText('Ablation Studies:', {
+          x: margin,
+          y,
+          size: 12,
+          font: helveticaBold,
+          color: black,
+        });
+        y -= 16;
+
+        for (const abl of milestone.ablations) {
+          checkPageBreak(35);
+          drawText(`${abl.id}: ${abl.factor} — Levels: ${abl.levels}`, margin + 10, 10, helvetica, darkGray, contentWidth - 20);
+        }
+        y -= 10;
       }
 
       // Deliverables
       if (milestone.deliverables?.length) {
-        lines.push('### Deliverables');
-        milestone.deliverables.forEach((del: string) => {
-          lines.push(`- ${del}`);
+        checkPageBreak(50);
+        currentPage.drawText('Deliverables:', {
+          x: margin,
+          y,
+          size: 12,
+          font: helveticaBold,
+          color: black,
         });
-        lines.push('');
+        y -= 16;
+
+        for (const del of milestone.deliverables) {
+          checkPageBreak(25);
+          drawText(`✓ ${del}`, margin + 10, 10, helvetica, darkGray, contentWidth - 20);
+        }
+        y -= 10;
       }
 
-      // Reading list (for milestone 1)
-      if (milestone.reading_list?.length) {
-        lines.push('### Core Reading List');
-        milestone.reading_list.forEach((paper: string) => {
-          lines.push(`- ${paper}`);
+      // Acceptance Check
+      if (milestone.acceptance_check) {
+        checkPageBreak(40);
+        currentPage.drawText('Acceptance Check:', {
+          x: margin,
+          y,
+          size: 11,
+          font: helveticaBold,
+          color: black,
         });
-        lines.push('');
+        y -= 14;
+        drawText(milestone.acceptance_check, margin + 10, 10, helveticaOblique, darkGray, contentWidth - 20);
+        y -= 10;
       }
 
-      // Risks
+      // Risks & Mitigations
       if (milestone.risks?.length) {
-        lines.push('### Risks & Mitigations');
-        milestone.risks.forEach((risk: any) => {
-          lines.push(`- **Risk:** ${risk.risk}`);
-          lines.push(`  - **Mitigation:** ${risk.mitigation}`);
+        checkPageBreak(60);
+        currentPage.drawText('Risks & Mitigations:', {
+          x: margin,
+          y,
+          size: 11,
+          font: helveticaBold,
+          color: black,
         });
-        lines.push('');
+        y -= 16;
+
+        for (const risk of milestone.risks) {
+          checkPageBreak(40);
+          drawText(`⚠ Risk: ${risk.risk}`, margin + 10, 10, helvetica, darkGray, contentWidth - 20);
+          drawText(`  ↳ Mitigation: ${risk.mitigation}`, margin + 15, 9, helveticaOblique, lightGray, contentWidth - 30);
+          y -= 5;
+        }
       }
+    }
+  }
+
+  // Timeline Table
+  if (roadmapJson.timeline_table?.length) {
+    currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+    y = pageHeight - margin;
+
+    currentPage.drawText('Timeline Summary', {
+      x: margin,
+      y,
+      size: 16,
+      font: helveticaBold,
+      color: accentColor,
     });
+    y -= 30;
+
+    for (const row of roadmapJson.timeline_table) {
+      checkPageBreak(40);
+      currentPage.drawText(row.milestone, {
+        x: margin,
+        y,
+        size: 11,
+        font: helveticaBold,
+        color: black,
+      });
+      y -= 14;
+      currentPage.drawText(`Weeks: ${row.weeks}`, {
+        x: margin + 10,
+        y,
+        size: 10,
+        font: helvetica,
+        color: darkGray,
+      });
+      y -= 12;
+      drawText(`Deliverables: ${row.deliverables}`, margin + 10, 9, helvetica, lightGray, contentWidth - 20);
+      y -= 15;
+    }
   }
 
   // Appendices
   if (roadmapJson.appendices?.length) {
-    lines.push('---');
-    lines.push('');
-    lines.push('# Appendices');
-    lines.push('');
-    roadmapJson.appendices.forEach((appendix: any) => {
-      lines.push(`## Appendix ${appendix.label}: ${appendix.title}`);
-      lines.push('');
+    for (const appendix of roadmapJson.appendices) {
+      currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+      y = pageHeight - margin;
+
+      currentPage.drawText(`Appendix ${appendix.label}: ${appendix.title}`, {
+        x: margin,
+        y,
+        size: 14,
+        font: helveticaBold,
+        color: accentColor,
+      });
+      y -= 25;
+
       if (Array.isArray(appendix.content)) {
-        appendix.content.forEach((item: any) => {
+        for (const item of appendix.content) {
+          checkPageBreak(30);
           if (typeof item === 'string') {
-            lines.push(`- ${item}`);
+            drawText(`• ${item}`, margin + 10, 10, helvetica, darkGray, contentWidth - 20);
           } else if (item.name && item.definition) {
-            lines.push(`- **${item.name}:** ${item.definition}`);
+            drawText(`${item.name}: ${item.definition}`, margin + 10, 10, helvetica, darkGray, contentWidth - 20);
           }
-        });
-      } else {
-        lines.push('```');
-        lines.push(appendix.content);
-        lines.push('```');
+        }
+      } else if (typeof appendix.content === 'string') {
+        // Code/folder structure
+        const lines = appendix.content.split('\\n');
+        for (const line of lines) {
+          checkPageBreak(15);
+          currentPage.drawText(line, {
+            x: margin + 10,
+            y,
+            size: 9,
+            font: helvetica,
+            color: darkGray,
+          });
+          y -= 12;
+        }
       }
-      lines.push('');
+    }
+  }
+
+  // Footer on last page
+  y -= 40;
+  if (y > margin) {
+    currentPage.drawText('Generated by Vizuara GenAI Mentor', {
+      x: margin,
+      y,
+      size: 9,
+      font: helveticaOblique,
+      color: lightGray,
     });
   }
 
-  // Footer
-  lines.push('---');
-  lines.push('');
-  lines.push('*Generated by Vizuara GenAI Mentor*');
-
-  return lines.join('\n');
+  return await pdfDoc.save();
 }
