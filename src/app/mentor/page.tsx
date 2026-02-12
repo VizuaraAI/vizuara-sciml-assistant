@@ -106,9 +106,12 @@ export default function MentorInboxPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch messages when student changes
+  // Fetch messages when student changes - clear threads first to prevent mixing
   useEffect(() => {
     if (selectedStudent) {
+      // Clear threads immediately to prevent showing old student's conversations
+      setThreads([]);
+      setSelectedThread(null);
       fetchMessages(selectedStudent.id);
     }
   }, [selectedStudent]);
@@ -788,13 +791,13 @@ export default function MentorInboxPage() {
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-200">
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </div>
+          <img
+            src="/vizuara-logo.png"
+            alt="Vizuara"
+            className="w-10 h-10 object-contain"
+          />
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">Mentor Dashboard</h1>
+            <h1 className="text-lg font-semibold text-slate-800">Vizuara Mentor Dashboard</h1>
             <p className="text-sm text-slate-500">Dr. Raj Dandekar</p>
           </div>
         </div>
@@ -958,18 +961,53 @@ export default function MentorInboxPage() {
                 filteredDrafts.map(draft => (
                   <button
                     key={draft.id}
-                    onClick={() => {
-                      // Find the thread for this draft
+                    onClick={async () => {
+                      // If draft is for a different student, switch to that student first
+                      if (selectedStudent?.id !== draft.studentId) {
+                        const draftStudent = students.find(s => s.id === draft.studentId);
+                        if (draftStudent) {
+                          setSelectedStudent(draftStudent);
+                          // Wait a bit for threads to load, then find and select the thread
+                          setTimeout(() => {
+                            const thread = threads.find(t => t.draftId === draft.id);
+                            if (thread) {
+                              handleSelectThread(thread);
+                            }
+                          }, 500);
+                          return;
+                        }
+                      }
+
+                      // Find the thread for this draft (includes full conversation history)
                       const thread = filteredThreads.find(t => t.draftId === draft.id);
                       if (thread) {
                         handleSelectThread(thread);
                       } else {
-                        // Create a temporary thread view
+                        // Create a comprehensive thread view with all available context
+                        // Find any prior messages in the threads that match this subject
+                        const priorMessages: Message[] = [];
+                        const normalizedDraftSubject = normalizeSubject(draft.subject);
+
+                        for (const t of filteredThreads) {
+                          for (const msg of t.messages) {
+                            if (normalizeSubject(msg.subject) === normalizedDraftSubject &&
+                                parseTimestamp(msg.timestamp).getTime() < parseTimestamp(draft.createdAt).getTime()) {
+                              priorMessages.push(msg);
+                            }
+                          }
+                        }
+
+                        // Sort prior messages by timestamp
+                        priorMessages.sort((a, b) =>
+                          parseTimestamp(a.timestamp).getTime() - parseTimestamp(b.timestamp).getTime()
+                        );
+
                         const tempThread: Thread = {
                           id: draft.id,
                           subject: draft.subject,
                           lastMessageAt: draft.createdAt,
                           messages: [
+                            ...priorMessages,
                             {
                               id: 'original-' + draft.id,
                               role: 'student',

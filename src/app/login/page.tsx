@@ -48,7 +48,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#fbfbfd] flex flex-col">
       {/* Header */}
       <header className="py-4 px-6">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto flex items-center gap-3">
+          <img src="/vizuara-logo.png" alt="Vizuara" className="w-8 h-8 object-contain" />
           <span className="text-[#1d1d1f] font-semibold text-xl tracking-tight">Vizuara</span>
         </div>
       </header>

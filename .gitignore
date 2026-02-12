@@ -30,3 +30,4 @@ temp_*.json
 *.log
 
 *.pdf
+.vercel

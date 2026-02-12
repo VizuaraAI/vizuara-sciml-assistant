@@ -1,17 +1,13 @@
 /**
  * Streaming Roadmap Generation API using Gemini 2.5 Pro
  * Uses Server-Sent Events to stream thinking tokens and progress
+ * PDFs are generated using pdfkit and stored in Supabase Storage
  */
 
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import * as fs from 'fs';
-import * as path from 'path';
+import PDFDocument from 'pdfkit';
 import { getResearchTopic } from '@/services/resources';
-
-const execAsync = promisify(exec);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -256,24 +252,42 @@ Follow the JSON structure EXACTLY. Include real papers, real datasets, and actio
 
         // Step 3: Generate PDF
         send('status', { step: 3, message: 'Generating PDF document...', phase: 'pdf' });
-        send('thinking', { text: 'Creating professional PDF with ReportLab...' });
+        send('thinking', { text: 'Creating professional PDF...' });
 
-        // Ensure uploads directory exists
-        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'roadmaps');
-        if (!fs.existsSync(uploadsDir)) {
-          fs.mkdirSync(uploadsDir, { recursive: true });
-        }
-
-        // Generate PDF
+        // Generate PDF using pdfkit to buffer
         const timestamp = Date.now();
         const safeTopicName = topicTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
         const filename = `roadmap_${safeTopicName}_${timestamp}.pdf`;
-        const pdfPath = path.join(uploadsDir, filename);
 
-        await generatePDFWithPython(roadmapJson, pdfPath);
+        const pdfBuffer = await generatePDFToBuffer(roadmapJson);
 
-        if (!fs.existsSync(pdfPath)) {
-          throw new Error('PDF generation failed - file not created');
+        send('status', { step: 3, message: 'PDF generated, uploading...', phase: 'pdf-upload' });
+
+        // Try to upload to Supabase Storage
+        let fullPdfUrl = '';
+        try {
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('roadmaps')
+            .upload(filename, pdfBuffer, {
+              contentType: 'application/pdf',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (!uploadError) {
+            const { data: publicUrlData } = supabase.storage
+              .from('roadmaps')
+              .getPublicUrl(filename);
+            fullPdfUrl = publicUrlData.publicUrl;
+          }
+        } catch (storageError) {
+          console.warn('Storage upload failed, using data URL fallback:', storageError);
+        }
+
+        // If storage failed, create a data URL for PDF
+        if (!fullPdfUrl) {
+          const base64Pdf = pdfBuffer.toString('base64');
+          fullPdfUrl = `data:application/pdf;base64,${base64Pdf}`;
         }
 
         send('status', { step: 3, message: 'PDF generated successfully', phase: 'pdf-done' });
@@ -282,14 +296,10 @@ Follow the JSON structure EXACTLY. Include real papers, real datasets, and actio
         send('status', { step: 4, message: 'Saving to database...', phase: 'save' });
         send('thinking', { text: 'Updating student record and saving roadmap...' });
 
-        const pdfUrl = `/uploads/roadmaps/${filename}`;
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-        const fullPdfUrl = `${baseUrl}${pdfUrl}`;
-
         // Save roadmap to database
         const roadmapContent = {
           ...roadmapJson,
-          pdf_url: pdfUrl,
+          pdf_url: fullPdfUrl,
           generated_at: new Date().toISOString(),
         };
 
@@ -433,21 +443,127 @@ function parseJSON(text: string): any {
   return JSON.parse(cleaned.trim());
 }
 
-async function generatePDFWithPython(roadmapJson: any, outputPath: string): Promise<void> {
-  const projectRoot = process.cwd();
-  const jsonPath = path.join(projectRoot, 'temp_roadmap_stream.json');
-  const pythonScript = path.join(process.env.HOME || '', '.claude/skills/roadmap-gen/generate_roadmap.py');
-  const venvPython = path.join(projectRoot, '.venv/bin/python');
+async function generatePDFToBuffer(roadmapJson: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const chunks: Buffer[] = [];
 
-  // Write JSON to temp file
-  fs.writeFileSync(jsonPath, JSON.stringify(roadmapJson, null, 2));
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
 
-  try {
-    const pythonCmd = fs.existsSync(venvPython) ? `"${venvPython}"` : 'python3';
-    await execAsync(`${pythonCmd} "${pythonScript}" "${jsonPath}" "${outputPath}"`);
-  } finally {
-    if (fs.existsSync(jsonPath)) {
-      fs.unlinkSync(jsonPath);
+      // Title
+      doc.fontSize(24).font('Helvetica-Bold')
+        .text(roadmapJson.title || 'Research Roadmap', { align: 'center' });
+      doc.moveDown(0.5);
+      doc.fontSize(16).font('Helvetica')
+        .text(roadmapJson.subtitle || '', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(11).font('Helvetica')
+        .text(`Researcher: ${roadmapJson.researcher || 'Student'}`, { align: 'center' })
+        .text(`Mentor: ${roadmapJson.mentor || 'Dr. Raj Dandekar'}`, { align: 'center' })
+        .text(`Date: ${roadmapJson.date || new Date().toLocaleDateString()}`, { align: 'center' });
+
+      doc.moveDown(2);
+
+      // Abstract
+      if (roadmapJson.abstract) {
+        doc.fontSize(14).font('Helvetica-Bold').text('Abstract');
+        doc.moveDown(0.3);
+        doc.fontSize(11).font('Helvetica').text(roadmapJson.abstract, { align: 'justify' });
+        doc.moveDown();
+      }
+
+      // Scope & Research Questions
+      if (roadmapJson.scope) {
+        doc.fontSize(14).font('Helvetica-Bold').text('1. Scope & Research Questions');
+        doc.moveDown(0.3);
+        if (roadmapJson.scope.goal) {
+          doc.fontSize(11).font('Helvetica-Bold').text('Goal: ', { continued: true })
+            .font('Helvetica').text(roadmapJson.scope.goal);
+        }
+        if (roadmapJson.scope.questions?.length) {
+          doc.moveDown(0.3);
+          roadmapJson.scope.questions.forEach((q: string, i: number) => {
+            doc.fontSize(11).font('Helvetica').text(`• ${q}`);
+          });
+        }
+        doc.moveDown();
+      }
+
+      // Dataset
+      if (roadmapJson.dataset) {
+        doc.fontSize(14).font('Helvetica-Bold').text('2. Primary Dataset');
+        doc.moveDown(0.3);
+        doc.fontSize(11).font('Helvetica-Bold').text(roadmapJson.dataset.name || 'Dataset');
+        if (roadmapJson.dataset.description) {
+          doc.font('Helvetica').text(roadmapJson.dataset.description);
+        }
+        doc.moveDown();
+      }
+
+      // Milestones
+      if (roadmapJson.milestones?.length) {
+        roadmapJson.milestones.forEach((milestone: any, idx: number) => {
+          // Check if we need a new page
+          if (doc.y > 650) doc.addPage();
+
+          doc.fontSize(14).font('Helvetica-Bold')
+            .text(`Milestone ${milestone.number || idx + 1}: ${milestone.title} (Weeks ${milestone.weeks || `${idx * 2 + 1}-${idx * 2 + 2}`})`);
+          doc.moveDown(0.3);
+
+          // Objectives
+          if (milestone.objectives?.length) {
+            doc.fontSize(11).font('Helvetica-Bold').text('Objectives:');
+            milestone.objectives.forEach((obj: string) => {
+              doc.font('Helvetica').text(`  • ${obj}`);
+            });
+            doc.moveDown(0.3);
+          }
+
+          // Tasks
+          if (milestone.tasks?.length) {
+            doc.fontSize(11).font('Helvetica-Bold').text('Tasks:');
+            milestone.tasks.forEach((task: string) => {
+              doc.font('Helvetica').text(`  ${task}`);
+            });
+            doc.moveDown(0.3);
+          }
+
+          // Deliverables
+          if (milestone.deliverables?.length) {
+            doc.fontSize(11).font('Helvetica-Bold').text('Deliverables:');
+            milestone.deliverables.forEach((del: string) => {
+              doc.font('Helvetica').text(`  • ${del}`);
+            });
+            doc.moveDown(0.3);
+          }
+
+          // Reading list (for milestone 1)
+          if (milestone.reading_list?.length && milestone.reading_list.length <= 15) {
+            doc.fontSize(11).font('Helvetica-Bold').text('Core Reading List:');
+            milestone.reading_list.slice(0, 10).forEach((paper: string) => {
+              doc.font('Helvetica').text(`  • ${paper}`, { width: 480 });
+            });
+            if (milestone.reading_list.length > 10) {
+              doc.font('Helvetica-Oblique').text(`  ... and ${milestone.reading_list.length - 10} more papers`);
+            }
+            doc.moveDown(0.3);
+          }
+
+          doc.moveDown();
+        });
+      }
+
+      // Footer
+      doc.moveDown(2);
+      doc.fontSize(9).font('Helvetica-Oblique')
+        .text('Generated by Vizuara GenAI Mentor', { align: 'center' });
+
+      doc.end();
+    } catch (error) {
+      reject(error);
     }
-  }
+  });
 }

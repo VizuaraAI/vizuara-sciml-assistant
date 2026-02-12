@@ -1,11 +1,17 @@
 /**
  * Streaming Colab Generation API
  * Uses Server-Sent Events to stream thinking tokens and progress
+ * Files are stored in Supabase Storage for production compatibility
  */
 
 import { NextRequest } from 'next/server';
-import * as fs from 'fs';
-import * as path from 'path';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 // Gemini API configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyCxs_tn_dxb_sQRHNAa0rPXKdcm-RxYTe4';
@@ -128,95 +134,90 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { topic, question, studentName } = body;
 
-        send('status', { step: 0, message: 'Starting notebook generation...', phase: 'init' });
+        console.log('[Colab] Starting generation for topic:', topic);
+        send('status', { step: 1, message: 'Generating notebook...', phase: 'generate' });
+        send('thinking', { text: `Creating notebook for: "${topic}"...` });
 
-        // Step 1: Analyze
-        send('status', { step: 1, message: 'Analyzing topic...', phase: 'analyze' });
-        send('thinking', { text: `Understanding the topic: "${topic}"...` });
+        // Single API call to generate everything
+        const prompt = `Create a complete educational Jupyter notebook about: ${topic}
 
-        const analysisPrompt = `${ANALYSIS_PROMPT}\n\nTOPIC: ${topic}\nQUESTION: ${question}\nSTUDENT: ${studentName || 'Student'}\n\nAnalyze this topic thoroughly.`;
+Question from student: ${question || topic}
+Student name: ${studentName || 'Student'}
 
-        const analysisResult = await callGeminiStreaming(
+Generate the notebook as a JSON array of cells. Each cell:
+{"cell_type": "markdown" | "code", "source": "content"}
+
+Include:
+1. Title with emoji and overview (markdown)
+2. Imports: torch, numpy, matplotlib (code)
+3. Concept explanation (markdown)
+4. Working implementation with comments (code)
+5. Example usage with print outputs (code)
+6. Key takeaways (markdown)
+
+Rules:
+- Code must be runnable
+- Use torch.manual_seed(42)
+- Add print() statements
+- Keep code cells under 20 lines
+
+Return ONLY valid JSON array. No markdown fencing.`;
+
+        const result = await callGeminiStreaming(
           SYSTEM_PROMPT,
-          analysisPrompt,
-          MAX_TOKENS_ANALYSIS,
-          (thought) => send('thinking', { text: thought })
-        );
-
-        const analysis = parseJSON(analysisResult.text);
-        send('status', { step: 1, message: `Found ${analysis.concepts?.length || 0} concepts`, phase: 'analyze-done' });
-
-        // Step 2: Design
-        send('status', { step: 2, message: 'Designing notebook structure...', phase: 'design' });
-        send('thinking', { text: 'Planning sections, examples, and visualizations...' });
-
-        const designPrompt = DESIGN_PROMPT_TEMPLATE.replace('{analysis_json}', JSON.stringify(analysis, null, 2));
-
-        const designResult = await callGeminiStreaming(
-          SYSTEM_PROMPT,
-          designPrompt,
-          MAX_TOKENS_DESIGN,
-          (thought) => send('thinking', { text: thought })
-        );
-
-        const design = parseJSON(designResult.text);
-        send('status', { step: 2, message: `Planned ${design.sections?.length || 0} sections`, phase: 'design-done' });
-
-        // Step 3: Generate
-        send('status', { step: 3, message: 'Generating notebook cells...', phase: 'generate' });
-        send('thinking', { text: 'Writing code and markdown for all 11 sections...' });
-
-        const generatePrompt = GENERATE_PROMPT_TEMPLATE
-          .replace('{analysis_json}', JSON.stringify(analysis, null, 2))
-          .replace('{design_json}', JSON.stringify(design, null, 2));
-
-        const cellsResult = await callGeminiStreaming(
-          SYSTEM_PROMPT,
-          generatePrompt,
+          prompt,
           MAX_TOKENS_GENERATE,
           (thought) => send('thinking', { text: thought })
         );
 
-        const cells = parseJSON(cellsResult.text);
+        console.log('[Colab] Generation complete, parsing...');
+        send('status', { step: 2, message: 'Processing...', phase: 'process' });
+
+        const cells = parseJSON(result.text);
         const codeCells = cells.filter((c: any) => c.cell_type === 'code').length;
-        send('status', { step: 3, message: `Generated ${cells.length} cells (${codeCells} code)`, phase: 'generate-done' });
+        send('status', { step: 2, message: `Generated ${cells.length} cells (${codeCells} code)`, phase: 'generate-done' });
 
-        // Step 4: Validate
-        send('status', { step: 4, message: 'Validating notebook...', phase: 'validate' });
-        send('thinking', { text: 'Checking for errors, missing imports, placeholders...' });
+        // Build notebook (skipping validation to save time)
+        console.log('[Colab] Step 3: Building notebook file...');
+        send('status', { step: 3, message: 'Building notebook file...', phase: 'build' });
 
-        const validatePrompt = VALIDATE_PROMPT_TEMPLATE.replace('{cells_json}', JSON.stringify(cells, null, 2));
-
-        const validatedResult = await callGeminiStreaming(
-          SYSTEM_PROMPT,
-          validatePrompt,
-          MAX_TOKENS_VALIDATE,
-          (thought) => send('thinking', { text: thought })
-        );
-
-        const validatedCells = parseJSON(validatedResult.text);
-        send('status', { step: 4, message: `Validated ${validatedCells.length} cells`, phase: 'validate-done' });
-
-        // Build and save notebook
-        send('status', { step: 5, message: 'Building notebook file...', phase: 'build' });
-
-        const title = design.notebook_title || analysis.title || topic;
-        const notebook = buildNotebook(title, validatedCells, studentName);
+        const title = topic;
+        const notebook = buildNotebook(title, cells, studentName);
 
         const timestamp = Date.now();
         const safeTopic = topic.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
         const filename = `${safeTopic}_${timestamp}.ipynb`;
 
-        const publicDir = path.join(process.cwd(), 'public', 'notebooks');
-        if (!fs.existsSync(publicDir)) {
-          fs.mkdirSync(publicDir, { recursive: true });
+        const notebookContent = JSON.stringify(notebook, null, 2);
+
+        // Try to upload to Supabase Storage
+        let fullUrl = '';
+        try {
+          const notebookBuffer = new Uint8Array(Buffer.from(notebookContent));
+
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('notebooks')
+            .upload(filename, notebookBuffer, {
+              contentType: 'application/json',
+              cacheControl: '3600',
+              upsert: true,
+            });
+
+          if (!uploadError) {
+            const { data: publicUrlData } = supabase.storage
+              .from('notebooks')
+              .getPublicUrl(filename);
+            fullUrl = publicUrlData.publicUrl;
+          }
+        } catch (storageError) {
+          console.warn('Storage upload failed, using data URL fallback:', storageError);
         }
 
-        const filePath = path.join(publicDir, filename);
-        fs.writeFileSync(filePath, JSON.stringify(notebook, null, 2));
-
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-        const fullUrl = `${baseUrl}/notebooks/${filename}`;
+        // If storage failed, create a data URL
+        if (!fullUrl) {
+          const base64Content = Buffer.from(notebookContent).toString('base64');
+          fullUrl = `data:application/json;base64,${base64Content}`;
+        }
 
         send('complete', {
           success: true,
@@ -225,15 +226,25 @@ export async function POST(request: NextRequest) {
           downloadUrl: fullUrl,
           downloadLink: `[📓 Download: ${title}](${fullUrl})`,
           message: `I've created a Google Colab code file for you.`,
-          cellCount: validatedCells.length,
+          cellCount: cells.length,
+          notebookContent: notebookContent, // Include content for frontend fallback
         });
 
       } catch (error) {
-        send('error', {
-          message: error instanceof Error ? error.message : 'Failed to generate notebook'
-        });
+        console.error('Colab generation error:', error);
+        try {
+          send('error', {
+            message: error instanceof Error ? error.message : 'Failed to generate notebook'
+          });
+        } catch (sendError) {
+          console.error('Failed to send error event:', sendError);
+        }
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch (closeError) {
+          console.error('Failed to close controller:', closeError);
+        }
       }
     },
   });
@@ -241,8 +252,9 @@ export async function POST(request: NextRequest) {
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   });
 }
@@ -254,6 +266,8 @@ async function callGeminiStreaming(
   maxTokens: number,
   onThinking: (text: string) => void
 ): Promise<{ text: string; thinking: string[] }> {
+  console.log('[Gemini] Making API call with maxTokens:', maxTokens);
+
   const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}&alt=sse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -269,8 +283,11 @@ async function callGeminiStreaming(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status}`);
+    console.error('[Gemini] API error:', response.status, errorText);
+    throw new Error(`Gemini API error: ${response.status} - ${errorText.slice(0, 200)}`);
   }
+
+  console.log('[Gemini] Response OK, reading stream...');
 
   const thinkingTokens: string[] = [];
   let fullText = '';
