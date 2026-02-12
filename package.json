@@ -21,7 +21,7 @@
     "@supabase/supabase-js": "^2.95.3",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.1",
-    "next": "14.2.29",
+    "next": "^14.2.35",
     "openai": "^6.21.0",
     "pdfkit": "^0.17.2",
     "postgres": "^3.4.8",
