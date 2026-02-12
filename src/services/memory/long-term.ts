@@ -62,6 +62,7 @@ export const MEMORY_KEYS = {
   QUESTIONS_ASKED: 'history.questions_asked',
   LAST_INTERACTION: 'history.last_interaction',
   PAPERS_RECOMMENDED: 'history.papers_recommended',
+  DAILY_NOTES: 'history.daily_notes', // Daily conversation summaries
 
   // Research (Phase II)
   RESEARCH_TOPIC: 'research.topic',
@@ -200,6 +201,46 @@ export async function incrementQuestionsAsked(studentId: string): Promise<void> 
 }
 
 /**
+ * Save a daily note about the student
+ */
+export async function saveDailyNote(
+  studentId: string,
+  note: string
+): Promise<void> {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const existing = await getStudentMemory(studentId, MEMORY_KEYS.DAILY_NOTES);
+  const notes = Array.isArray(existing) ? existing : [];
+
+  // Add new note with timestamp
+  notes.push({
+    date: today,
+    note,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Keep only last 30 days of notes
+  const recentNotes = notes.slice(-30);
+
+  await setStudentMemory(studentId, MEMORY_KEYS.DAILY_NOTES, recentNotes);
+}
+
+/**
+ * Get recent daily notes
+ */
+export async function getRecentDailyNotes(
+  studentId: string,
+  days: number = 7
+): Promise<Array<{ date: string; note: string; timestamp: string }>> {
+  const notes = await getStudentMemory(studentId, MEMORY_KEYS.DAILY_NOTES);
+  if (!Array.isArray(notes)) return [];
+
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  return notes.filter((n: any) => new Date(n.date) >= cutoffDate);
+}
+
+/**
  * Format student profile for agent context
  */
 export function formatProfileForContext(profile: StudentProfile): string {
@@ -214,7 +255,7 @@ export function formatProfileForContext(profile: StudentProfile): string {
     lines.push(`Topics completed: ${profile.topicsCompleted}`);
   } else {
     lines.push(`Research topic: ${profile.researchTopic || 'Not yet selected'}`);
-    lines.push(`Current milestone: ${profile.currentMilestone} of 4`);
+    lines.push(`Current milestone: ${profile.currentMilestone} of 5`);
   }
 
   if (profile.learningStyle) {

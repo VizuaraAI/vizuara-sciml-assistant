@@ -64,7 +64,7 @@ class TeachingAssistant {
     }
 
     // 2. Build system prompt based on phase
-    const systemPrompt = this.buildSystemPrompt(context);
+    const systemPrompt = this.buildFullSystemPrompt(context);
 
     // 3. Get conversation history
     const conversationMessages = await this.getConversationHistory(studentId);
@@ -131,7 +131,7 @@ class TeachingAssistant {
   /**
    * Build the system prompt based on context
    */
-  private buildSystemPrompt(context: AgentContext): string {
+  private buildFullSystemPrompt(context: AgentContext): string {
     // Get base persona
     const basePrompt = getBaseSystemPrompt();
 
@@ -147,8 +147,24 @@ class TeachingAssistant {
     // Get resource summary
     const resourceSummary = getResourceSummary();
 
-    // Combine everything
-    return buildSystemPrompt(studentContext, phasePrompt, resourceSummary);
+    // Combine everything using the prompts/system buildSystemPrompt
+    const systemPrompt = buildSystemPrompt(
+      context.studentProfile?.name || 'Student',
+      context.currentPhase as 'phase1' | 'phase2',
+      {
+        researchTopic: context.studentProfile?.researchTopic,
+        enrollmentDate: context.studentProfile?.enrollmentDate?.toISOString(),
+      }
+    );
+
+    // Add additional context
+    return `${systemPrompt}
+
+ADDITIONAL CONTEXT:
+${studentContext}
+
+RESOURCE SUMMARY:
+${resourceSummary}`;
   }
 
   /**
@@ -213,7 +229,7 @@ class TeachingAssistant {
     const context = await getAgentContext(studentId);
     if (!context) return null;
 
-    const systemPrompt = this.buildSystemPrompt(context);
+    const systemPrompt = this.buildFullSystemPrompt(context);
     const messages = await this.getConversationHistory(studentId);
     const tools = this.getToolsForPhase(context.currentPhase);
 
@@ -221,7 +237,7 @@ class TeachingAssistant {
       systemPrompt,
       messagesCount: messages.length,
       toolsAvailable: tools.map((t) => t.name),
-      phase: context.currentPhase,
+      phase: context.currentPhase as 'phase1' | 'phase2',
       studentContext: formatContextForAgent(context),
     };
   }

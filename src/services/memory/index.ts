@@ -22,6 +22,8 @@ import {
   updateLastInteraction,
   incrementQuestionsAsked,
   formatProfileForContext,
+  saveDailyNote,
+  getRecentDailyNotes,
   MEMORY_KEYS,
   type StudentProfile,
 } from './long-term';
@@ -49,6 +51,8 @@ export {
   updateLastInteraction,
   incrementQuestionsAsked,
   formatProfileForContext,
+  saveDailyNote,
+  getRecentDailyNotes,
 };
 
 // ============== AGENT CONTEXT ==============
@@ -154,6 +158,61 @@ export async function updateMemoryFromConversation(
   for (const interest of interests) {
     await recordInterest(studentId, interest);
   }
+
+  // Generate and save a daily note summarizing this interaction
+  const noteContent = generateConversationNote(userMessage, agentResponse, topics, interests);
+  if (noteContent) {
+    await saveDailyNote(studentId, noteContent);
+  }
+}
+
+/**
+ * Generate a brief note summarizing the conversation
+ */
+function generateConversationNote(
+  userMessage: string,
+  agentResponse: string,
+  topics: string[],
+  interests: string[]
+): string | null {
+  const notes: string[] = [];
+
+  // Detect if student asked about specific topics
+  if (topics.length > 0) {
+    notes.push(`Asked about: ${topics.join(', ')}`);
+  }
+
+  // Detect if student expressed interests
+  if (interests.length > 0) {
+    notes.push(`Interested in: ${interests.join(', ')}`);
+  }
+
+  // Detect if student mentioned struggles/confusion
+  const struggleKeywords = ['confused', 'don\'t understand', 'stuck', 'help', 'struggling', 'difficult', 'hard'];
+  const msgLower = userMessage.toLowerCase();
+  for (const keyword of struggleKeywords) {
+    if (msgLower.includes(keyword)) {
+      notes.push('Expressed difficulty or confusion');
+      break;
+    }
+  }
+
+  // Detect if student mentioned progress
+  const progressKeywords = ['finished', 'completed', 'done with', 'watched', 'learned', 'understood'];
+  for (const keyword of progressKeywords) {
+    if (msgLower.includes(keyword)) {
+      notes.push('Reported progress');
+      break;
+    }
+  }
+
+  // Detect if roadmap was generated
+  if (agentResponse.toLowerCase().includes('roadmap') && agentResponse.toLowerCase().includes('pdf')) {
+    notes.push('Generated research roadmap');
+  }
+
+  // Only save if there's something meaningful
+  return notes.length > 0 ? notes.join('. ') : null;
 }
 
 /**

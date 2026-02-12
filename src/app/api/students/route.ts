@@ -4,29 +4,57 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getAllStudentsWithUsers } from '@/db/queries/students';
+import { createClient } from '@supabase/supabase-js';
+
+// Disable caching for this route - always fetch fresh data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export async function GET() {
   try {
-    const studentsWithUsers = await getAllStudentsWithUsers();
+    // Get students with their user info
+    const { data: students, error } = await supabase
+      .from('students')
+      .select(`
+        id,
+        user_id,
+        current_phase,
+        current_topic_index,
+        current_milestone,
+        research_topic,
+        enrollment_date,
+        users!students_user_id_fkey (
+          name,
+          email
+        )
+      `);
 
-    const students = studentsWithUsers.map(({ student, user }) => ({
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const formattedStudents = (students || []).map((student: any) => ({
       id: student.id,
-      userId: student.userId,
-      name: user.name,
-      email: user.email,
-      currentPhase: student.currentPhase,
-      currentTopicIndex: student.currentTopicIndex,
-      currentMilestone: student.currentMilestone,
-      researchTopic: student.researchTopic,
-      enrollmentDate: student.enrollmentDate.toISOString(),
+      userId: student.user_id,
+      name: student.users?.name || 'Unknown',
+      email: student.users?.email || '',
+      currentPhase: student.current_phase,
+      currentTopicIndex: student.current_topic_index,
+      currentMilestone: student.current_milestone,
+      researchTopic: student.research_topic,
+      enrollmentDate: student.enrollment_date,
     }));
 
     return NextResponse.json({
       success: true,
       data: {
-        count: students.length,
-        students,
+        count: formattedStudents.length,
+        students: formattedStudents,
       },
     });
   } catch (error) {

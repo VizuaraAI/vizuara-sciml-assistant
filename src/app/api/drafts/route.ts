@@ -1,12 +1,20 @@
 /**
  * Drafts API Endpoint
  * GET /api/drafts?studentId=xxx - Get pending drafts
- * POST /api/drafts/approve - Approve a draft
- * POST /api/drafts/reject - Reject a draft
+ * POST /api/drafts - Approve, reject, or edit a draft
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getPendingDrafts, approveDraft, rejectDraft, editAndApproveDraft } from '@/services/agent';
+import { createClient } from '@supabase/supabase-js';
+
+// Disable caching for this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,17 +28,41 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const drafts = await getPendingDrafts(studentId);
+    // Get conversation for this student
+    const { data: conversation } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('student_id', studentId)
+      .single();
+
+    if (!conversation) {
+      return NextResponse.json({
+        success: true,
+        data: { count: 0, drafts: [] },
+      });
+    }
+
+    // Get draft messages
+    const { data: drafts, error } = await supabase
+      .from('messages')
+      .select('id, content, tool_calls, created_at')
+      .eq('conversation_id', conversation.id)
+      .eq('status', 'draft')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new Error(error.message);
+    }
 
     return NextResponse.json({
       success: true,
       data: {
-        count: drafts.length,
-        drafts: drafts.map((d) => ({
+        count: drafts?.length || 0,
+        drafts: (drafts || []).map((d) => ({
           id: d.id,
           content: d.content,
-          toolCalls: d.toolCalls,
-          createdAt: d.createdAt.toISOString(),
+          toolCalls: d.tool_calls,
+          createdAt: d.created_at,
         })),
       },
     });
@@ -47,7 +79,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, draftId, mentorId, content, reason } = body;
+    const { action, draftId, content, reason } = body;
 
     if (!draftId) {
       return NextResponse.json(
@@ -56,20 +88,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For now, use a placeholder mentor ID
-    const mentor = mentorId || 'mentor-placeholder';
-
     switch (action) {
       case 'approve': {
-        const message = await approveDraft(draftId, mentor);
+        // Update status to 'approved' (sent to student)
+        const { data, error } = await supabase
+          .from('messages')
+          .update({ status: 'approved' })
+          .eq('id', draftId)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
         return NextResponse.json({
           success: true,
-          data: { message: 'Draft approved', messageId: message.id },
+          data: { message: 'Draft approved', messageId: data.id },
         });
       }
 
       case 'reject': {
-        await rejectDraft(draftId, mentor, reason);
+        // Delete the draft
+        const { error } = await supabase
+          .from('messages')
+          .delete()
+          .eq('id', draftId);
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
         return NextResponse.json({
           success: true,
           data: { message: 'Draft rejected' },
@@ -83,10 +132,48 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        const message = await editAndApproveDraft(draftId, mentor, content);
+
+        // Update content and approve
+        const { data, error } = await supabase
+          .from('messages')
+          .update({ content, status: 'approved' })
+          .eq('id', draftId)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
         return NextResponse.json({
           success: true,
-          data: { message: 'Draft edited and approved', messageId: message.id },
+          data: { message: 'Draft edited and approved', messageId: data.id },
+        });
+      }
+
+      case 'update': {
+        // Update content only (keep as draft)
+        if (!content) {
+          return NextResponse.json(
+            { success: false, error: 'Missing required field: content for update action' },
+            { status: 400 }
+          );
+        }
+
+        const { data, error } = await supabase
+          .from('messages')
+          .update({ content })
+          .eq('id', draftId)
+          .select()
+          .single();
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        return NextResponse.json({
+          success: true,
+          data: { message: 'Draft updated', messageId: data.id },
         });
       }
 

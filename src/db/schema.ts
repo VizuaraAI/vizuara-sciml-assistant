@@ -100,6 +100,7 @@ export const roadmaps = pgTable('roadmaps', {
   studentId: uuid('student_id').references(() => students.id).notNull(),
   topic: varchar('topic', { length: 500 }).notNull(),
   content: jsonb('content').notNull(), // Full roadmap structure
+  accepted: boolean('accepted').default(false), // Whether student has accepted this roadmap
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

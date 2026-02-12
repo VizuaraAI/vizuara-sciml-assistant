@@ -40,12 +40,26 @@ export {
   getRoadmapTools,
 } from './roadmap';
 
+export {
+  voiceNoteToolDefinitions,
+  registerVoiceNoteTools,
+  getVoiceNoteTools,
+} from './voice-notes';
+
+export {
+  colabToolDefinitions,
+  registerColabTools,
+  getColabTools,
+} from './colab-notebook';
+
 import { ToolRegistry, createToolRegistry } from './registry';
 import { registerVideoCatalogTools } from './video-catalog';
 import { registerResearchTopicsTools } from './research-topics';
 import { registerProgressTools } from './progress';
 import { registerMemoryTools } from './memory';
 import { registerRoadmapTools } from './roadmap';
+import { registerVoiceNoteTools } from './voice-notes';
+import { registerColabTools } from './colab-notebook';
 
 /**
  * Create a fully configured tool registry with all tools
@@ -59,6 +73,7 @@ export function createFullToolRegistry(): ToolRegistry {
   registerProgressTools(registry);
   registerMemoryTools(registry);
   registerRoadmapTools(registry);
+  registerColabTools(registry);
 
   return registry;
 }
@@ -72,6 +87,8 @@ export function createPhase1ToolRegistry(): ToolRegistry {
   registerVideoCatalogTools(registry);
   registerProgressTools(registry);
   registerMemoryTools(registry);
+  registerVoiceNoteTools(registry);
+  registerColabTools(registry);
 
   return registry;
 }
@@ -86,6 +103,44 @@ export function createPhase2ToolRegistry(): ToolRegistry {
   registerProgressTools(registry);
   registerMemoryTools(registry);
   registerRoadmapTools(registry);
+  registerVoiceNoteTools(registry);
+  registerColabTools(registry);
 
   return registry;
+}
+
+import { videoToolDefinitions } from './video-catalog';
+import { researchToolDefinitions } from './research-topics';
+import { progressToolDefinitions } from './progress';
+import { memoryToolDefinitions } from './memory';
+import { roadmapToolDefinitions } from './roadmap';
+import { voiceNoteToolDefinitions } from './voice-notes';
+import { colabToolDefinitions } from './colab-notebook';
+import type { Tool } from './types';
+
+/**
+ * Get Phase I tools as array (for API use)
+ */
+export function getPhase1Tools(): Tool[] {
+  return [
+    ...Object.values(videoToolDefinitions),
+    ...Object.values(progressToolDefinitions),
+    ...Object.values(memoryToolDefinitions),
+    ...Object.values(voiceNoteToolDefinitions),
+    ...Object.values(colabToolDefinitions),
+  ];
+}
+
+/**
+ * Get Phase II tools as array (for API use)
+ */
+export function getPhase2Tools(): Tool[] {
+  return [
+    ...Object.values(researchToolDefinitions),
+    ...Object.values(progressToolDefinitions),
+    ...Object.values(memoryToolDefinitions),
+    ...Object.values(roadmapToolDefinitions),
+    ...Object.values(voiceNoteToolDefinitions),
+    ...Object.values(colabToolDefinitions),
+  ];
 }

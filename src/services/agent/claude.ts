@@ -1,16 +1,19 @@
 /**
- * Claude API Client Wrapper
- * Handles communication with the Anthropic API
+ * OpenAI API Client Wrapper
+ * Handles communication with the OpenAI API (GPT-5.2)
+ * Note: File kept as claude.ts to minimize code changes elsewhere
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { env } from '@/lib/env';
 import type { Tool, ToolCall, ToolResultMessage } from './tools/types';
 
-// Types for Claude API
+// Types for API (keeping names for compatibility)
 export interface ClaudeMessage {
-  role: 'user' | 'assistant';
-  content: string | ContentBlock[];
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string | null;
+  tool_calls?: OpenAI.Chat.ChatCompletionMessageToolCall[];
+  tool_call_id?: string;
 }
 
 export interface ContentBlock {
@@ -40,15 +43,29 @@ export interface ChatOptions {
 }
 
 /**
- * Claude API Client
+ * Convert our tool format to OpenAI function format
+ */
+function convertToolsToOpenAI(tools: Tool[]): OpenAI.Chat.ChatCompletionTool[] {
+  return tools.map((tool) => ({
+    type: 'function' as const,
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema,
+    },
+  }));
+}
+
+/**
+ * OpenAI API Client (aliased as ClaudeClient for compatibility)
  */
 class ClaudeClient {
-  private client: Anthropic;
-  private model: string = 'claude-sonnet-4-20250514';
+  private client: OpenAI;
+  private model: string = 'gpt-4o'; // Using GPT-4o as latest available
 
   constructor() {
-    this.client = new Anthropic({
-      apiKey: env.ANTHROPIC_API_KEY,
+    this.client = new OpenAI({
+      apiKey: env.OPENAI_API_KEY,
     });
   }
 
@@ -59,18 +76,59 @@ class ClaudeClient {
     const { system, messages, tools, maxTokens = 4096, temperature = 0.7 } = options;
 
     try {
-      const response = await this.client.messages.create({
+      // Build OpenAI messages array
+      const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: 'system', content: system },
+      ];
+
+      // Convert our messages to OpenAI format
+      for (const msg of messages) {
+        if (msg.role === 'user') {
+          openaiMessages.push({
+            role: 'user',
+            content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          });
+        } else if (msg.role === 'assistant') {
+          if (msg.tool_calls && msg.tool_calls.length > 0) {
+            openaiMessages.push({
+              role: 'assistant',
+              content: msg.content || null,
+              tool_calls: msg.tool_calls,
+            });
+          } else {
+            openaiMessages.push({
+              role: 'assistant',
+              content: typeof msg.content === 'string' ? msg.content : '',
+            });
+          }
+        } else if (msg.role === 'tool' && msg.tool_call_id) {
+          openaiMessages.push({
+            role: 'tool',
+            tool_call_id: msg.tool_call_id,
+            content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          });
+        }
+      }
+
+      // Build request options
+      const requestOptions: OpenAI.Chat.ChatCompletionCreateParams = {
         model: this.model,
         max_tokens: maxTokens,
         temperature,
-        system,
-        messages: messages as any,
-        tools: tools as any,
-      });
+        messages: openaiMessages,
+      };
+
+      // Add tools if provided
+      if (tools && tools.length > 0) {
+        requestOptions.tools = convertToolsToOpenAI(tools);
+        requestOptions.tool_choice = 'auto';
+      }
+
+      const response = await this.client.chat.completions.create(requestOptions);
 
       return this.parseResponse(response);
     } catch (error) {
-      console.error('Claude API error:', error);
+      console.error('OpenAI API error:', error);
       throw error;
     }
   }
@@ -93,45 +151,31 @@ class ClaudeClient {
       iterations++;
 
       // Build the assistant message with tool calls
-      const assistantContent: ContentBlock[] = [];
-
-      // Add text if present
-      if (response.content) {
-        assistantContent.push({ type: 'text', text: response.content });
-      }
-
-      // Add tool use blocks
-      for (const call of response.toolCalls) {
-        assistantContent.push({
-          type: 'tool_use',
+      const assistantMessage: ClaudeMessage = {
+        role: 'assistant',
+        content: response.content || null,
+        tool_calls: response.toolCalls.map((call) => ({
           id: call.id,
-          name: call.name,
-          input: call.input,
-        });
-      }
+          type: 'function' as const,
+          function: {
+            name: call.name,
+            arguments: JSON.stringify(call.input),
+          },
+        })),
+      };
 
-      // Add assistant message
-      messages = [
-        ...messages,
-        { role: 'assistant', content: assistantContent },
-      ];
+      messages = [...messages, assistantMessage];
 
-      // Execute tool calls and collect results
-      const toolResults: ContentBlock[] = [];
+      // Execute tool calls and add results
       for (const call of response.toolCalls) {
         const result = await executeToolCall(call);
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: call.id,
+        const toolMessage: ClaudeMessage = {
+          role: 'tool',
           content: result,
-        });
+          tool_call_id: call.id,
+        };
+        messages = [...messages, toolMessage];
       }
-
-      // Add tool results as user message
-      messages = [
-        ...messages,
-        { role: 'user', content: toolResults },
-      ];
 
       // Get next response
       response = await this.chat({ ...options, messages });
@@ -143,28 +187,32 @@ class ClaudeClient {
   /**
    * Parse the API response into our format
    */
-  private parseResponse(response: Anthropic.Message): ClaudeResponse {
-    let textContent = '';
+  private parseResponse(response: OpenAI.Chat.ChatCompletion): ClaudeResponse {
+    const choice = response.choices[0];
+    const message = choice.message;
+
+    let textContent = message.content || '';
     const toolCalls: ToolCall[] = [];
 
-    for (const block of response.content) {
-      if (block.type === 'text') {
-        textContent += block.text;
-      } else if (block.type === 'tool_use') {
-        toolCalls.push({
-          id: block.id,
-          name: block.name,
-          input: block.input as Record<string, any>,
-        });
+    // Parse tool calls if present
+    if (message.tool_calls) {
+      for (const toolCall of message.tool_calls) {
+        if (toolCall.type === 'function') {
+          toolCalls.push({
+            id: toolCall.id,
+            name: toolCall.function.name,
+            input: JSON.parse(toolCall.function.arguments || '{}'),
+          });
+        }
       }
     }
 
     return {
       content: textContent,
       toolCalls,
-      stopReason: response.stop_reason || 'end_turn',
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
+      stopReason: choice.finish_reason || 'stop',
+      inputTokens: response.usage?.prompt_tokens || 0,
+      outputTokens: response.usage?.completion_tokens || 0,
     };
   }
 
@@ -184,7 +232,7 @@ class ClaudeClient {
 let clientInstance: ClaudeClient | null = null;
 
 /**
- * Get the Claude client instance
+ * Get the client instance
  */
 export function getClaudeClient(): ClaudeClient {
   if (!clientInstance) {

@@ -22,8 +22,8 @@ function getOptionalEnv(key: string, defaultValue: string = ''): string {
 export const DATABASE_URL = getRequiredEnv('DATABASE_URL');
 export const DIRECT_URL = getOptionalEnv('DIRECT_URL', DATABASE_URL);
 
-// Claude API
-export const ANTHROPIC_API_KEY = getRequiredEnv('ANTHROPIC_API_KEY');
+// OpenAI API
+export const OPENAI_API_KEY = getRequiredEnv('OPENAI_API_KEY');
 
 // NextAuth
 export const NEXTAUTH_SECRET = getOptionalEnv('NEXTAUTH_SECRET', 'dev-secret');
@@ -37,7 +37,7 @@ export const isProduction = process.env.NODE_ENV === 'production';
 export const env = {
   DATABASE_URL,
   DIRECT_URL,
-  ANTHROPIC_API_KEY,
+  OPENAI_API_KEY,
   NEXTAUTH_SECRET,
   NEXTAUTH_URL,
   isDevelopment,
