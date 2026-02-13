@@ -1,6 +1,16 @@
 /**
  * Email Service
- * Send emails using Resend API (HTTP-based, works on Railway)
+ * Send emails using SendGrid API
+ *
+ * Setup:
+ * 1. Create free account at https://sendgrid.com
+ * 2. Go to Settings > API Keys > Create API Key (Full Access)
+ * 3. Go to Settings > Sender Authentication > Verify a Single Sender
+ *    - Add your email (e.g., teamvizuara@gmail.com)
+ *    - Click verification link in your inbox
+ * 4. Set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL in environment
+ *
+ * Free tier: 100 emails/day
  */
 
 interface WelcomeEmailParams {
@@ -34,43 +44,56 @@ Let us get started.
 Best regards,
 Dr Raj Dandekar`;
 
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+  const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'rajatdandekar@vizuara.com';
 
-  if (!RESEND_API_KEY) {
-    console.error('RESEND_API_KEY is not configured');
+  if (!SENDGRID_API_KEY) {
+    console.error('SENDGRID_API_KEY is not configured');
     return {
       success: false,
-      error: 'Email service not configured. Please set RESEND_API_KEY environment variable.',
+      error: 'Email service not configured. Please set SENDGRID_API_KEY environment variable.',
     };
   }
 
   try {
-    const response = await fetch('https://api.resend.com/emails', {
+    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Authorization': `Bearer ${SENDGRID_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Dr Raj Dandekar <onboarding@resend.dev>',
-        to: [to],
+        personalizations: [
+          {
+            to: [{ email: to }],
+          },
+        ],
+        from: {
+          email: SENDGRID_FROM_EMAIL,
+          name: 'Dr Raj Dandekar',
+        },
         subject: "Let's get started",
-        text: emailContent,
+        content: [
+          {
+            type: 'text/plain',
+            value: emailContent,
+          },
+        ],
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Resend API error:', errorData);
-      return {
-        success: false,
-        error: errorData.message || 'Failed to send email',
-      };
+    // SendGrid returns 202 Accepted on success (no body)
+    if (response.status === 202) {
+      console.log('Email sent successfully via SendGrid');
+      return { success: true };
     }
 
-    const data = await response.json();
-    console.log('Email sent successfully:', data.id);
-    return { success: true };
+    const errorData = await response.json().catch(() => ({}));
+    console.error('SendGrid API error:', response.status, errorData);
+    return {
+      success: false,
+      error: errorData.errors?.[0]?.message || `SendGrid error: ${response.status}`,
+    };
   } catch (error) {
     console.error('Failed to send email:', error);
     return {
