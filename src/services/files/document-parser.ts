@@ -113,7 +113,6 @@ async function parsePDF(
 ): Promise<ParsedDocument> {
   try {
     // Dynamic import with type assertion to handle ESM/CJS compatibility
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const pdfParse = require('pdf-parse');
     const result = await pdfParse(buffer);
 
@@ -143,7 +142,6 @@ async function parseDOCX(
   filename: string
 ): Promise<ParsedDocument> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mammoth = require('mammoth');
     const result = await mammoth.extractRawText({ buffer });
 
@@ -173,7 +171,6 @@ async function parseExcel(
   filename: string
 ): Promise<ParsedDocument> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const XLSX = require('xlsx');
     const workbook = XLSX.read(buffer, { type: 'buffer' });
 
