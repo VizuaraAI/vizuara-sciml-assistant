@@ -133,13 +133,21 @@ export function getPhase1Tools(): Tool[] {
 
 /**
  * Get Phase II tools as array (for API use)
+ * NOTE: generate_roadmap is intentionally EXCLUDED - roadmaps should only be
+ * generated when the mentor explicitly clicks "Generate Roadmap" button.
+ * The AI can only check roadmap status and get milestone details.
  */
 export function getPhase2Tools(): Tool[] {
+  // Filter out generate_roadmap - only include get_milestone_details and get_roadmap_status
+  const allowedRoadmapTools = Object.values(roadmapToolDefinitions).filter(
+    tool => tool.name !== 'generate_roadmap'
+  );
+
   return [
     ...Object.values(researchToolDefinitions),
     ...Object.values(progressToolDefinitions),
     ...Object.values(memoryToolDefinitions),
-    ...Object.values(roadmapToolDefinitions),
+    ...allowedRoadmapTools,
     ...Object.values(voiceNoteToolDefinitions),
     ...Object.values(colabToolDefinitions),
   ];
