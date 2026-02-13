@@ -113,7 +113,8 @@ async function parsePDF(
 ): Promise<ParsedDocument> {
   try {
     // Dynamic import to avoid build issues if package not installed
-    const pdfParse = (await import('pdf-parse')).default;
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse = pdfParseModule.default || pdfParseModule;
     const result = await pdfParse(buffer);
 
     return {
