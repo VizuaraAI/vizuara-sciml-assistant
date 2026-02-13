@@ -351,6 +351,10 @@ export default function StudentInboxPage() {
       // Always include subject for proper threading
       const fullMessage = `Subject: ${subject || 'General Question'}\n\n${messageContent}`;
 
+      // Use AbortController for timeout (2 minutes for large PDF processing)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
+
       const res = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -359,8 +363,10 @@ export default function StudentInboxPage() {
           message: fullMessage,
           attachments: uploadedFiles,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const data = await res.json();
 
       if (data.success) {
@@ -378,7 +384,11 @@ export default function StudentInboxPage() {
       }
     } catch (error) {
       console.error('Failed to send message:', error);
-      alert('Failed to send message. Please try again.');
+      if (error instanceof Error && error.name === 'AbortError') {
+        alert('Request timed out. Large files may take longer to process. Please try again.');
+      } else {
+        alert('Failed to send message. Please try again.');
+      }
     } finally {
       setIsSending(false);
     }

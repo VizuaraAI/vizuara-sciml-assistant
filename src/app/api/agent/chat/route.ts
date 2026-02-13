@@ -5,6 +5,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+
+// Extend timeout for long-running Gemini requests with large PDFs
+export const maxDuration = 120; // 2 minutes (Railway supports up to 5 minutes)
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI, Part, FunctionDeclaration, SchemaType } from '@google/generative-ai';
 import { buildSystemPrompt } from '@/services/agent/prompts/system';
