@@ -321,9 +321,9 @@ export async function POST(request: NextRequest) {
     console.log(`[Chat API] Tools available: ${tools.map(t => t.name).join(', ')}`);
 
     // Initialize Gemini model with function calling
-    // Using Gemini 2.5 Pro preview - most capable model
+    // Using Gemini 2.5 Pro - most capable model
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-pro-preview-06-05',
+      model: 'gemini-2.5-pro',
       systemInstruction: systemPrompt,
       tools: tools.length > 0 ? [{
         functionDeclarations: convertToolsToGemini(tools),
