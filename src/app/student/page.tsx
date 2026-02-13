@@ -266,16 +266,21 @@ export default function StudentInboxPage() {
     console.log('handleFileSelect called', e.target.files);
     const files = e.target.files;
     if (files && files.length > 0) {
-      console.log('Adding files:', Array.from(files).map(f => f.name));
+      // IMPORTANT: Convert FileList to Array IMMEDIATELY before any async operations
+      // FileList is a live reference - if we clear the input, the FileList becomes empty
+      const fileArray = Array.from(files);
+      console.log('Adding files:', fileArray.map(f => f.name));
+
+      // Reset input BEFORE setState so user can select same file again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
       setAttachments(prev => {
-        const newAttachments = [...prev, ...Array.from(files)];
+        const newAttachments = [...prev, ...fileArray];
         console.log('New attachments state:', newAttachments.map(f => f.name));
         return newAttachments;
       });
-    }
-    // Reset input so same file can be selected again
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
     }
   }
 
