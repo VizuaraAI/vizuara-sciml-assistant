@@ -1130,15 +1130,6 @@ export default function MentorInboxPage() {
             </>
           )}
           <button
-            onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-sm font-medium hover:bg-green-200 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            Upload Document
-          </button>
-          <button
             onClick={() => {
               setShowInactiveModal(true);
               fetchInactiveStudents();
@@ -1443,17 +1434,6 @@ export default function MentorInboxPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {!selectedThread.hasDraft && (
-                      <button
-                        onClick={() => setShowThreadCompose(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                        </svg>
-                        Reply in Thread
-                      </button>
-                    )}
                     <button
                       onClick={() => setSelectedThread(null)}
                       className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
@@ -1659,52 +1639,9 @@ export default function MentorInboxPage() {
                   </div>
                 ))}
 
-                {/* In-Thread Compose Area */}
-                {showThreadCompose && (
-                  <div className="bg-white rounded-xl border border-blue-200 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-blue-100 bg-blue-50/50">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium bg-gradient-to-br from-slate-600 to-slate-800">
-                          RD
-                        </div>
-                        <div>
-                          <p className="font-medium text-slate-800">Dr. Raj Dandekar (You)</p>
-                          <p className="text-xs text-slate-500">Replying to {selectedStudent?.name}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <textarea
-                        value={threadComposeMessage}
-                        onChange={e => setThreadComposeMessage(e.target.value)}
-                        placeholder="Write your reply..."
-                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl resize-none outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800 leading-relaxed min-h-[150px]"
-                        autoFocus
-                      />
-
-                      {/* Attachments list */}
-                      {threadAttachments.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {threadAttachments.map((file, index) => (
-                            <div key={index} className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-sm">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                              </svg>
-                              <span className="max-w-[150px] truncate">{file.name}</span>
-                              <button
-                                onClick={() => removeThreadAttachment(index)}
-                                className="text-blue-500 hover:text-blue-700"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
+                {/* Always Visible Compose Area - Modern Email Style */}
+                {!selectedThread.hasDraft && (
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
                     {/* Hidden file input */}
                     <input
                       type="file"
@@ -1715,53 +1652,104 @@ export default function MentorInboxPage() {
                       accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.py,.js,.ts,.jsx,.tsx,.json,.csv,.png,.jpg,.jpeg,.gif,.webp,.jl,.ipynb"
                     />
 
-                    <div className="p-4 border-t border-slate-100 flex justify-between items-center">
-                      {/* Attachment button */}
-                      <button
-                        onClick={() => threadFileInputRef.current?.click()}
-                        className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-sm"
-                        title="Attach files"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                        </svg>
-                        <span>Attach</span>
-                      </button>
+                    {/* Attachments Preview - Shows above textarea when files attached */}
+                    {threadAttachments.length > 0 && (
+                      <div className="px-4 pt-4 pb-2 bg-slate-50 border-b border-slate-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
+                          <span className="text-sm font-medium text-slate-700">{threadAttachments.length} file{threadAttachments.length > 1 ? 's' : ''} attached</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {threadAttachments.map((file, index) => (
+                            <div key={index} className="group flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm shadow-sm hover:border-blue-300 transition-colors">
+                              {file.type.startsWith('image/') ? (
+                                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                              ) : file.type.includes('pdf') ? (
+                                <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              )}
+                              <span className="max-w-[150px] truncate font-medium">{file.name}</span>
+                              <span className="text-xs text-slate-400">({(file.size / 1024).toFixed(0)} KB)</span>
+                              <button
+                                onClick={() => removeThreadAttachment(index)}
+                                className="ml-1 p-0.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                      <div className="flex gap-3">
+                    {/* Compose Area */}
+                    <div className="p-4">
+                      <textarea
+                        value={threadComposeMessage}
+                        onChange={e => setThreadComposeMessage(e.target.value)}
+                        placeholder={`Reply to ${selectedStudent?.name}...`}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg resize-none outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800 leading-relaxed min-h-[100px] text-sm"
+                      />
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="px-4 pb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {/* Attachment Button with Badge */}
                         <button
-                          onClick={() => {
-                            setShowThreadCompose(false);
-                            setThreadComposeMessage('');
-                            setThreadAttachments([]);
-                          }}
-                          className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium text-sm"
+                          onClick={() => threadFileInputRef.current?.click()}
+                          className={`relative flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
+                            threadAttachments.length > 0
+                              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                          title="Attach files (PDF, images, code, etc.)"
                         >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={sendThreadMessage}
-                          disabled={isSendingThreadMessage || (!threadComposeMessage.trim() && threadAttachments.length === 0)}
-                          className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 flex items-center gap-2 text-sm"
-                        >
-                          {isSendingThreadMessage ? (
-                            <>
-                              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                              </svg>
-                              Sending...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                              </svg>
-                              Send Reply
-                            </>
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
+                          <span>Attach Files</span>
+                          {threadAttachments.length > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                              {threadAttachments.length}
+                            </span>
                           )}
                         </button>
                       </div>
+
+                      <button
+                        onClick={sendThreadMessage}
+                        disabled={isSendingThreadMessage || (!threadComposeMessage.trim() && threadAttachments.length === 0)}
+                        className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm shadow-sm"
+                      >
+                        {isSendingThreadMessage ? (
+                          <>
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                            Send
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 )}

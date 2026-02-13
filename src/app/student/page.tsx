@@ -642,44 +642,9 @@ export default function StudentInboxPage() {
                 ))}
               </div>
 
-              {/* Reply Box */}
+              {/* Reply Box - Modern Email Style */}
               <div className="p-4 border-t border-slate-200/60 bg-white/80 flex-shrink-0">
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-                  <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2 text-sm text-slate-600">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                    </svg>
-                    Reply to this conversation
-                  </div>
-                  <textarea
-                    value={replyBody}
-                    onChange={e => setReplyBody(e.target.value)}
-                    placeholder="Write your reply..."
-                    className="w-full p-4 text-slate-800 bg-transparent outline-none resize-none placeholder-slate-400 min-h-[80px]"
-                  />
-
-                  {/* Attachments list */}
-                  {attachments.length > 0 && (
-                    <div className="px-4 pb-2 flex flex-wrap gap-2">
-                      {attachments.map((file, index) => (
-                        <div key={index} className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-sm">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                          </svg>
-                          <span className="max-w-[150px] truncate">{file.name}</span>
-                          <button
-                            onClick={() => removeAttachment(index)}
-                            className="text-blue-500 hover:text-blue-700"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
+                <div className="bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
                   {/* Hidden file input */}
                   <input
                     type="file"
@@ -690,25 +655,104 @@ export default function StudentInboxPage() {
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.py,.js,.ts,.jsx,.tsx,.json,.csv,.png,.jpg,.jpeg,.gif,.webp,.jl,.ipynb"
                   />
 
-                  <div className="p-3 border-t border-slate-100 flex items-center justify-between">
-                    {/* Attachment button */}
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-sm"
-                      title="Attach files"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                      </svg>
-                      <span>Attach</span>
-                    </button>
+                  {/* Attachments Preview - Shows above textarea when files attached */}
+                  {attachments.length > 0 && (
+                    <div className="px-4 pt-4 pb-2 bg-slate-50 border-b border-slate-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        <span className="text-sm font-medium text-slate-700">{attachments.length} file{attachments.length > 1 ? 's' : ''} attached</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {attachments.map((file, index) => (
+                          <div key={index} className="group flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm shadow-sm hover:border-blue-300 transition-colors">
+                            {file.type.startsWith('image/') ? (
+                              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            ) : file.type.includes('pdf') ? (
+                              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            )}
+                            <span className="max-w-[150px] truncate font-medium">{file.name}</span>
+                            <span className="text-xs text-slate-400">({(file.size / 1024).toFixed(0)} KB)</span>
+                            <button
+                              onClick={() => removeAttachment(index)}
+                              className="ml-1 p-0.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Compose Area */}
+                  <div className="p-4">
+                    <textarea
+                      value={replyBody}
+                      onChange={e => setReplyBody(e.target.value)}
+                      placeholder="Write your reply..."
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg resize-none outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800 leading-relaxed min-h-[80px] text-sm"
+                    />
+                  </div>
+
+                  {/* Action Bar */}
+                  <div className="px-4 pb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {/* Attachment Button with Badge */}
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`relative flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
+                          attachments.length > 0
+                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                        title="Attach files (PDF, images, code, etc.)"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        <span>Attach Files</span>
+                        {attachments.length > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                            {attachments.length}
+                          </span>
+                        )}
+                      </button>
+                    </div>
 
                     <button
                       onClick={() => sendMessage(true)}
                       disabled={isSending || (!replyBody.trim() && attachments.length === 0)}
-                      className="px-4 py-2 text-white rounded-lg font-medium disabled:opacity-50 flex items-center gap-2 text-sm" style={{ backgroundColor: '#0071e3' }}
+                      className="px-5 py-2.5 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm shadow-sm hover:opacity-90 transition-all"
+                      style={{ backgroundColor: '#0071e3' }}
                     >
-                      {isSending ? 'Sending...' : 'Send Reply'}
+                      {isSending ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                          </svg>
+                          Send
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
