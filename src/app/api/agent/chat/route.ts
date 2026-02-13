@@ -351,14 +351,32 @@ export async function POST(request: NextRequest) {
       }] : undefined,
     });
 
+    // Clean the message text - remove attachment markdown since we're sending actual files
+    // The frontend adds "📎 Attachments:\n- [filename](url)" which confuses the model
+    let cleanedMessage = message;
+    if (multimodalParts.length > 0) {
+      // Remove the attachment section from the message
+      cleanedMessage = message
+        .replace(/📎\s*Attachments?:[\s\S]*$/i, '')  // Remove everything from "📎 Attachments:" onwards
+        .replace(/Subject:\s*[^\n]*\n?/i, '')        // Remove "Subject: ..." line
+        .trim();
+
+      // If message becomes empty after cleaning, use a default
+      if (!cleanedMessage) {
+        cleanedMessage = 'Please analyze the attached file(s).';
+      }
+
+      console.log(`[DEBUG] Original message: "${message.substring(0, 100)}..."`);
+      console.log(`[DEBUG] Cleaned message: "${cleanedMessage}"`);
+    }
+
     // Build user message parts (text + any attachments)
     const userParts: Part[] = [
-      { text: message },
+      { text: cleanedMessage },
       ...multimodalParts,
     ];
 
     console.log(`[Chat API] Sending to Gemini with ${userParts.length} part(s)`);
-    console.log(`[DEBUG] User message text: "${message}"`);
 
     // Start chat and send message
     const chat = model.startChat({
