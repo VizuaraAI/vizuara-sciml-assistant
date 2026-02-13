@@ -351,7 +351,10 @@ export default function StudentInboxPage() {
       // Always include subject for proper threading
       const fullMessage = `Subject: ${subject || 'General Question'}\n\n${messageContent}`;
 
-      // Send message - response is instant, AI processing happens in background
+      // Use AbortController for timeout (2 minutes for large PDF processing)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
       const res = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -360,8 +363,10 @@ export default function StudentInboxPage() {
           message: fullMessage,
           attachments: uploadedFiles,
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
       const data = await res.json();
 
       if (data.success) {

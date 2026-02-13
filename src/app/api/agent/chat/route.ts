@@ -72,12 +72,10 @@ function convertSchemaToGemini(schema: any): any {
 function isConversationEnding(message: string): boolean {
   const normalized = message.trim().toLowerCase();
 
-  // If it contains a question mark, it's NOT an ending - they're asking something
   if (normalized.includes('?')) {
     return false;
   }
 
-  // Short acknowledgment patterns (must be short messages)
   const shortPatterns = [
     /^(sure|ok|okay|got it|will do|sounds good|perfect|great|thanks|thank you|bye|see you|talk later)[\s,!.]*$/i,
     /^(sure|ok|okay|got it|will do|sounds good|perfect|great|thanks|thank you)[\s,!.]*dr\.?\s*raj[\s,!.]*$/i,
@@ -85,7 +83,6 @@ function isConversationEnding(message: string): boolean {
     /^thank you[\s,!.]*$/i,
   ];
 
-  // Excitement/anticipation patterns (can be longer messages)
   const excitementPatterns = [
     /^(sounds good|sure|ok|okay|perfect|great).*?(i('m| am) (really )?(excited|looking forward)|excited to|looking forward)/i,
     /^(i('m| am) (really )?(excited|looking forward)|excited to|looking forward)/i,
@@ -95,7 +92,6 @@ function isConversationEnding(message: string): boolean {
 
   const wordCount = normalized.split(/\s+/).length;
 
-  // Check short patterns only for short messages (8 words or less)
   if (wordCount <= 8) {
     for (const pattern of shortPatterns) {
       if (pattern.test(normalized)) {
@@ -104,7 +100,6 @@ function isConversationEnding(message: string): boolean {
     }
   }
 
-  // Check excitement patterns for messages up to 15 words
   if (wordCount <= 15) {
     for (const pattern of excitementPatterns) {
       if (pattern.test(normalized)) {
@@ -126,15 +121,10 @@ interface Attachment {
 
 // MIME types supported by Gemini for inline data
 const GEMINI_SUPPORTED_MIME_TYPES = new Set([
-  // Images
   'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/heic', 'image/heif', 'image/gif',
-  // PDFs
   'application/pdf',
-  // Audio
   'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/aiff', 'audio/aac', 'audio/ogg', 'audio/flac',
-  // Video
   'video/mp4', 'video/mpeg', 'video/mov', 'video/avi', 'video/x-flv', 'video/mpg', 'video/webm', 'video/wmv', 'video/3gpp',
-  // Text
   'text/plain', 'text/html', 'text/css', 'text/javascript', 'text/markdown',
 ]);
 
@@ -143,7 +133,6 @@ async function attachmentToGeminiPart(attachment: Attachment): Promise<{ part: P
   try {
     console.log(`[Gemini] Processing attachment: ${attachment.filename}, mime: ${attachment.mimeType}`);
 
-    // Check if MIME type is supported
     if (!GEMINI_SUPPORTED_MIME_TYPES.has(attachment.mimeType)) {
       console.log(`[Gemini] Skipping unsupported MIME type: ${attachment.mimeType}`);
       return {
@@ -169,7 +158,6 @@ async function attachmentToGeminiPart(attachment: Attachment): Promise<{ part: P
 
     console.log(`[Gemini] Downloaded ${attachment.filename}: ${buffer.length} bytes, mime: ${attachment.mimeType}`);
 
-    // Gemini supports inline data for images, PDFs, etc.
     return {
       part: {
         inlineData: {
@@ -232,6 +220,275 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if this is a conversation-ending message - save and return early
+    if (isConversationEnding(message)) {
+      console.log('[Chat API] Conversation-ending message detected, not generating response');
+
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        role: 'student',
+        content: message,
+        status: 'sent',
+      });
+
+      return NextResponse.json({
+        success: true,
+        noResponseNeeded: true,
+        message: 'Message sent successfully',
+      });
+    }
+
+    // Get student info
+    const { data: student, error: studentError } = await supabase
+      .from('students')
+      .select(`
+        *,
+        users!students_user_id_fkey (name, email, preferred_name)
+      `)
+      .eq('id', studentId)
+      .single();
+
+    if (studentError || !student) {
+      return NextResponse.json(
+        { success: false, error: 'Student not found' },
+        { status: 404 }
+      );
+    }
+
+    const phase = student.current_phase as 'phase1' | 'phase2';
+    // Use preferred_name if available, otherwise fall back to first name
+    const studentName = student.users?.preferred_name || student.users?.name?.split(' ')[0] || 'Student';
+
+    console.log(`[Chat API] Student: ${studentName}, Phase: ${phase}, Topic: ${student.current_topic_index}`);
+
+    // Process attachments for Gemini multimodal
+    const multimodalParts: Part[] = [];
+    const attachmentDescriptions: string[] = [];
+    const skippedFiles: string[] = [];
+
+    if (attachments && attachments.length > 0) {
+      console.log(`[Chat API] Processing ${attachments.length} attachment(s) for Gemini multimodal`);
+
+      for (const attachment of attachments) {
+        const result = await attachmentToGeminiPart(attachment);
+        if (result.part) {
+          multimodalParts.push(result.part);
+          attachmentDescriptions.push(`- ${attachment.filename} (${attachment.mimeType})`);
+          console.log(`[Chat API] Added ${attachment.filename} to Gemini context`);
+        } else if (result.skipped) {
+          skippedFiles.push(`${attachment.filename}: ${result.reason}`);
+          console.log(`[Chat API] Skipped ${attachment.filename}: ${result.reason}`);
+        }
+      }
+    }
+
+    // Load student's long-term memory profile
+    let memoryContext = '';
+    try {
+      const studentProfile = await getStudentProfile(studentId);
+      if (studentProfile) {
+        memoryContext = formatProfileForContext(studentProfile);
+      }
+
+      const recentNotes = await getRecentDailyNotes(studentId, 7);
+      if (recentNotes.length > 0) {
+        memoryContext += '\n\nRecent conversation notes:\n';
+        for (const note of recentNotes.slice(-5)) {
+          memoryContext += `- ${note.date}: ${note.note}\n`;
+        }
+      }
+    } catch (memoryLoadError) {
+      console.warn('[Chat API] Failed to load memory context:', memoryLoadError);
+    }
+
+    // Fetch roadmap for Phase II students
+    let roadmapContent: string | null = null;
+    let roadmapAccepted = false;
+    if (phase === 'phase2') {
+      const { data: roadmap } = await supabase
+        .from('roadmaps')
+        .select('content, accepted')
+        .eq('student_id', studentId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (roadmap?.content) {
+        roadmapContent = JSON.stringify(roadmap.content);
+        const contentObj = roadmap.content as any;
+        roadmapAccepted = roadmap.accepted || contentObj?._accepted || false;
+      }
+    }
+
+    // Build document context for system prompt
+    let documentContext = '';
+    if (multimodalParts.length > 0) {
+      documentContext = `The student has attached ${multimodalParts.length} file(s) that you can see and read:\n${attachmentDescriptions.join('\n')}\n\nThese files are included as inline multimodal content in this message. Read and analyze them.`;
+    }
+    if (skippedFiles.length > 0) {
+      documentContext += `\n\nNote: Some attached files could not be analyzed (unsupported format):\n${skippedFiles.join('\n')}\nPlease let the student know they can share these files in a different format (PDF, images, or text).`;
+    }
+
+    // Build system prompt
+    const systemPrompt = buildSystemPrompt(studentName, phase, {
+      researchTopic: student.research_topic,
+      enrollmentDate: student.enrollment_date,
+      phase1Start: student.phase1_start,
+      phase2Start: student.phase2_start,
+      memoryContext,
+      roadmapContent: roadmapAccepted ? roadmapContent : null,
+      documentContext,
+    });
+
+    // Get tools and registry based on phase
+    const tools = phase === 'phase1' ? getPhase1Tools() : getPhase2Tools();
+    const toolRegistry = phase === 'phase1' ? createPhase1ToolRegistry() : createPhase2ToolRegistry();
+
+    console.log(`[Chat API] Tools available: ${tools.map(t => t.name).join(', ')}`);
+
+    // Initialize Gemini model with function calling
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-pro',
+      systemInstruction: systemPrompt,
+      tools: tools.length > 0 ? [{
+        functionDeclarations: convertToolsToGemini(tools),
+      }] : undefined,
+    });
+
+    // Clean the message text - remove attachment markdown since we're sending actual files
+    let cleanedMessage = message;
+    if (multimodalParts.length > 0) {
+      cleanedMessage = message
+        .replace(/📎\s*Attachments?:[\s\S]*$/i, '')
+        .replace(/Subject:\s*[^\n]*\n?/i, '')
+        .trim();
+
+      if (!cleanedMessage) {
+        cleanedMessage = 'Please analyze the attached file(s).';
+      }
+    }
+
+    // Build user message parts (text + any attachments)
+    const userParts: Part[] = [
+      { text: cleanedMessage },
+      ...multimodalParts,
+    ];
+
+    console.log(`[Chat API] Sending to Gemini with ${userParts.length} part(s)`);
+
+    // Start chat and send message
+    const chat = model.startChat({
+      generationConfig: {
+        maxOutputTokens: 4096,
+        temperature: 0.7,
+      },
+    });
+
+    let finalContent = '';
+    let allToolCalls: any[] = [];
+    let iterations = 0;
+    const maxIterations = 5;
+
+    // Send initial message
+    let result = await chat.sendMessage(userParts);
+    let response = result.response;
+
+    // Tool execution loop
+    while (iterations < maxIterations) {
+      iterations++;
+
+      const candidates = response.candidates;
+      if (!candidates || candidates.length === 0) break;
+
+      const content = candidates[0].content;
+      if (!content || !content.parts) {
+        console.log('[Chat API] No content or parts in response, breaking loop');
+        break;
+      }
+      const parts = content.parts;
+
+      const functionCalls = parts.filter(p => 'functionCall' in p);
+
+      if (functionCalls.length === 0) {
+        for (const part of parts) {
+          if ('text' in part && part.text) {
+            finalContent += part.text;
+          }
+        }
+        break;
+      }
+
+      // Execute function calls
+      const functionResponses: Part[] = [];
+
+      for (const part of functionCalls) {
+        if ('functionCall' in part && part.functionCall) {
+          const functionCall = part.functionCall;
+          const name = functionCall.name;
+          const args = functionCall.args;
+          console.log(`[Chat API] Executing tool: ${name}`, args);
+
+          let toolResult: any;
+          try {
+            if (toolRegistry.hasTool(name)) {
+              toolResult = await toolRegistry.execute(name, args || {}, {
+                studentId,
+                currentPhase: phase,
+              });
+            } else {
+              toolResult = { error: `Unknown tool: ${name}` };
+            }
+          } catch (error) {
+            toolResult = {
+              error: error instanceof Error ? error.message : 'Tool execution failed'
+            };
+          }
+
+          allToolCalls.push({
+            name,
+            input: args,
+            result: toolResult,
+          });
+
+          functionResponses.push({
+            functionResponse: {
+              name,
+              response: toolResult,
+            },
+          });
+        }
+      }
+
+      // Send function responses back to Gemini
+      result = await chat.sendMessage(functionResponses);
+      response = result.response;
+    }
+
+    // If still no content after tool calls, get final response text
+    if (!finalContent) {
+      const candidates = response.candidates;
+      if (candidates && candidates.length > 0 && candidates[0].content?.parts) {
+        for (const part of candidates[0].content.parts) {
+          if ('text' in part && part.text) {
+            finalContent += part.text;
+          }
+        }
+      }
+    }
+
+    console.log(`[Chat API] Gemini response: ${finalContent.length} chars, ${allToolCalls.length} tool calls`);
+
+    // Create draft in database
+    const draftId = crypto.randomUUID();
+
+    // Delete any existing drafts for this conversation to prevent duplicates
+    await supabase
+      .from('messages')
+      .delete()
+      .eq('conversation_id', conversation.id)
+      .eq('role', 'agent')
+      .eq('status', 'draft');
+
     // Build student message data with attachments
     const studentMessageData: any = {
       conversation_id: conversation.id,
@@ -249,50 +506,45 @@ export async function POST(request: NextRequest) {
       }));
     }
 
-    // Save student message IMMEDIATELY
+    // Save student message
     await supabase.from('messages').insert(studentMessageData);
-    console.log(`[Chat API] Student message saved for ${studentId}`);
 
-    // Check if this is a conversation-ending message - don't generate AI response
-    if (isConversationEnding(message)) {
-      console.log('[Chat API] Conversation-ending message detected, not generating response');
-      return NextResponse.json({
-        success: true,
-        noResponseNeeded: true,
-        message: 'Message sent successfully',
-      });
-    }
-
-    // Trigger background AI processing (fire and forget)
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || 'http://localhost:3000';
-    const processUrl = `${baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`}/api/agent/process`;
-
-    // Fire and forget - don't await
-    fetch(processUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        studentId,
-        message,
-        attachments,
-        conversationId: conversation.id,
-      }),
-    }).catch(err => console.error('[Chat API] Background processing error:', err));
-
-    // Return success immediately - student doesn't wait for AI
-    return NextResponse.json({
-      success: true,
-      message: 'Message sent successfully. Response will be generated shortly.',
+    // Save agent response as draft
+    await supabase.from('messages').insert({
+      id: draftId,
+      conversation_id: conversation.id,
+      role: 'agent',
+      content: finalContent || "I received your message and I'm thinking about how to best respond.",
+      tool_calls: allToolCalls.length > 0 ? allToolCalls : null,
+      status: 'draft',
     });
 
+    // Update long-term memory
+    try {
+      await updateMemoryFromConversation(studentId, message, finalContent);
+      console.log(`[Chat API] Memory updated for student ${studentId}`);
+    } catch (memoryError) {
+      console.error('[Chat API] Failed to update memory:', memoryError);
+    }
+
+    return NextResponse.json({
+      success: true,
+      draft: {
+        id: draftId,
+        content: finalContent,
+        toolCalls: allToolCalls,
+        createdAt: new Date().toISOString(),
+      },
+      model: 'gemini-2.5-pro',
+    });
   } catch (error) {
     console.error('Chat API error:', error);
+
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Internal server error' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
-
-// Note: AI processing now happens in /api/agent/process endpoint
-// The POST function above saves the student message immediately and triggers background processing
