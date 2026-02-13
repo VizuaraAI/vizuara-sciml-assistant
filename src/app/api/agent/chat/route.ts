@@ -484,6 +484,7 @@ export async function POST(request: NextRequest) {
       .replace(/\*([^*]+)\*/g, '$1');
 
     console.log(`[Chat API] Gemini response: ${finalContent.length} chars, ${allToolCalls.length} tool calls`);
+    console.log(`[DEBUG] Response preview: "${finalContent.substring(0, 300)}..."`);
 
     // Create draft in database
     const draftId = crypto.randomUUID();
