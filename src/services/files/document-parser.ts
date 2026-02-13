@@ -30,13 +30,17 @@ export async function parseDocument(
   mimeType: string,
   filename: string
 ): Promise<ParsedDocument> {
+  console.log(`[DocParser] Parsing document: ${filename}, type: ${mimeType}, path: ${storagePath}`);
+
   try {
     // Download file from Supabase storage
+    console.log(`[DocParser] Downloading from Supabase storage bucket 'documents'...`);
     const { data, error } = await supabase.storage
       .from('documents')
       .download(storagePath);
 
     if (error || !data) {
+      console.error(`[DocParser] Download failed:`, error);
       return {
         success: false,
         mimeType,
@@ -44,6 +48,8 @@ export async function parseDocument(
         error: `Failed to download file: ${error?.message || 'Unknown error'}`,
       };
     }
+
+    console.log(`[DocParser] Download successful, file size: ${data.size} bytes`);
 
     const buffer = Buffer.from(await data.arrayBuffer());
 
@@ -111,10 +117,12 @@ async function parsePDF(
   mimeType: string,
   filename: string
 ): Promise<ParsedDocument> {
+  console.log(`[DocParser] Parsing PDF: ${filename}, buffer size: ${buffer.length} bytes`);
   try {
     // Dynamic import with type assertion to handle ESM/CJS compatibility
     const pdfParse = require('pdf-parse');
     const result = await pdfParse(buffer);
+    console.log(`[DocParser] PDF parsed successfully, extracted ${result.text?.length || 0} characters`);
 
     return {
       success: true,
@@ -123,7 +131,7 @@ async function parsePDF(
       filename,
     };
   } catch (error) {
-    console.error('PDF parsing error:', error);
+    console.error('[DocParser] PDF parsing error:', error);
     return {
       success: false,
       mimeType,
@@ -244,12 +252,23 @@ export async function parseMultipleDocuments(
   images: Array<{ base64: string; mimeType: string; filename: string }>;
   errors: string[];
 }> {
+  console.log(`[DocParser] parseMultipleDocuments called with ${documents.length} document(s)`);
+  console.log(`[DocParser] Documents:`, JSON.stringify(documents, null, 2));
+
   const textContent: string[] = [];
   const images: Array<{ base64: string; mimeType: string; filename: string }> = [];
   const errors: string[] = [];
 
   for (const doc of documents) {
+    console.log(`[DocParser] Processing: ${doc.filename}`);
     const result = await parseDocument(doc.storagePath, doc.mimeType, doc.filename);
+    console.log(`[DocParser] Result for ${doc.filename}:`, {
+      success: result.success,
+      hasContent: !!result.content,
+      contentLength: result.content?.length || 0,
+      isImage: result.isImage,
+      error: result.error,
+    });
 
     if (result.success) {
       if (result.isImage && result.imageBase64) {

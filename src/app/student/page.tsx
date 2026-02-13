@@ -300,7 +300,7 @@ export default function StudentInboxPage() {
 
     try {
       // First upload any attachments
-      const uploadedFiles: Array<{ filename: string; url: string; mimeType: string; storagePath: string }> = [];
+      const uploadedFiles: Array<{ filename: string; publicUrl: string; mimeType: string; storagePath: string }> = [];
 
       for (const file of attachments) {
         const formData = new FormData();
@@ -317,12 +317,16 @@ export default function StudentInboxPage() {
 
         const uploadData = await uploadRes.json();
         if (uploadData.success && uploadData.data?.document) {
-          uploadedFiles.push({
+          const uploadedFile = {
             filename: uploadData.data.document.originalFilename,
-            url: uploadData.data.document.publicUrl,
+            publicUrl: uploadData.data.document.publicUrl,  // Must be publicUrl, not url
             mimeType: uploadData.data.document.mimeType,
             storagePath: uploadData.data.document.storagePath,
-          });
+          };
+          console.log('File uploaded successfully:', uploadedFile);
+          uploadedFiles.push(uploadedFile);
+        } else {
+          console.error('File upload failed:', uploadData);
         }
       }
 
@@ -331,7 +335,7 @@ export default function StudentInboxPage() {
       if (uploadedFiles.length > 0) {
         messageContent += '\n\n📎 Attachments:\n';
         uploadedFiles.forEach(f => {
-          messageContent += `- [${f.filename}](${f.url})\n`;
+          messageContent += `- [${f.filename}](${f.publicUrl})\n`;
         });
       }
 

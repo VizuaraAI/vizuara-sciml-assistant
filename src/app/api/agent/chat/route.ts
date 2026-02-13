@@ -169,10 +169,17 @@ export async function POST(request: NextRequest) {
     let imageContents: Array<{ type: 'image_url'; image_url: { url: string; detail: 'auto' } }> = [];
 
     if (attachments && attachments.length > 0) {
-      console.log(`[Chat API] Processing ${attachments.length} attachment(s)`);
+      console.log(`[Chat API] Processing ${attachments.length} attachment(s):`, JSON.stringify(attachments, null, 2));
 
       try {
+        console.log('[Chat API] Calling parseMultipleDocuments...');
         const parsedDocs = await parseMultipleDocuments(attachments);
+        console.log('[Chat API] parseMultipleDocuments returned:', {
+          hasTextContent: !!parsedDocs.textContent,
+          textLength: parsedDocs.textContent?.length || 0,
+          imageCount: parsedDocs.images?.length || 0,
+          errorCount: parsedDocs.errors?.length || 0,
+        });
 
         // Add text content from documents to context
         if (parsedDocs.textContent) {
