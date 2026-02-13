@@ -346,14 +346,19 @@ Current Focus: Help the student progress through their roadmap milestones. Refer
     }
   }
 
-  // Attached documents section
+  // Attached documents section - tell Gemini it CAN see the files
   const documentSection = context.documentContext
     ? `
-ATTACHED DOCUMENTS (Student has shared the following files for context):
+═══════════════════════════════════════════════════════════════════════════════
+MULTIMODAL FILE ATTACHMENTS - YOU CAN SEE THESE FILES
+═══════════════════════════════════════════════════════════════════════════════
+
 ${context.documentContext}
 
-When the student asks about attached documents, refer to the content above.
-For images, you can see them in the message - describe what you see and answer questions about them.
+IMPORTANT: The student has attached file(s) that are included in this message as multimodal content.
+You CAN see and read these files directly - PDFs, images, documents are all visible to you.
+DO NOT say "I cannot see attachments" or "this interface doesn't support files".
+Analyze the attached content and respond to the student's question about it.
 `
     : '';
 

@@ -228,6 +228,7 @@ export async function POST(request: NextRequest) {
 
     // Process attachments for Gemini multimodal - NO parsing needed!
     const multimodalParts: Part[] = [];
+    const attachmentDescriptions: string[] = [];
 
     if (attachments && attachments.length > 0) {
       console.log(`[Chat API] Processing ${attachments.length} attachment(s) for Gemini multimodal`);
@@ -236,6 +237,7 @@ export async function POST(request: NextRequest) {
         const part = await attachmentToGeminiPart(attachment);
         if (part) {
           multimodalParts.push(part);
+          attachmentDescriptions.push(`- ${attachment.filename} (${attachment.mimeType})`);
           console.log(`[Chat API] Added ${attachment.filename} to Gemini context`);
         }
       }
@@ -310,7 +312,7 @@ export async function POST(request: NextRequest) {
       memoryContext,
       roadmapContent: roadmapAccepted ? roadmapContent : null,
       documentContext: multimodalParts.length > 0
-        ? `\n\n[${multimodalParts.length} file(s) attached - you can see and analyze them directly]`
+        ? `The student has attached ${multimodalParts.length} file(s) that you can see and read:\n${attachmentDescriptions.join('\n')}\n\nThese files are included as inline multimodal content in this message. Read and analyze them.`
         : '',
     });
 
