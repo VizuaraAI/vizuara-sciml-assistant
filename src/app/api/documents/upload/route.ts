@@ -124,14 +124,29 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Ensure bucket exists (create if not)
-    const { data: buckets } = await supabase.storage.listBuckets();
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+
+    if (listError) {
+      console.error('Failed to list buckets:', listError);
+    }
+
     const bucketExists = buckets?.some(b => b.name === BUCKET_NAME);
+    console.log('Bucket check:', { bucketExists, bucketsFound: buckets?.map(b => b.name) });
 
     if (!bucketExists) {
-      await supabase.storage.createBucket(BUCKET_NAME, {
+      console.log('Creating bucket:', BUCKET_NAME);
+      const { data: createData, error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
         public: true,
         fileSizeLimit: MAX_FILE_SIZE,
       });
+
+      if (createError) {
+        console.error('Failed to create bucket:', createError);
+        // If bucket creation fails, it might already exist or we don't have permission
+        // Try to continue anyway - the upload will fail if bucket truly doesn't exist
+      } else {
+        console.log('Bucket created successfully:', createData);
+      }
     }
 
     // Upload to Supabase storage
