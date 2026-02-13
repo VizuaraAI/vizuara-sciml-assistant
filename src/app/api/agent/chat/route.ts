@@ -121,9 +121,35 @@ interface Attachment {
   publicUrl?: string;
 }
 
+// MIME types supported by Gemini for inline data
+const GEMINI_SUPPORTED_MIME_TYPES = new Set([
+  // Images
+  'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/heic', 'image/heif', 'image/gif',
+  // PDFs
+  'application/pdf',
+  // Audio
+  'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/aiff', 'audio/aac', 'audio/ogg', 'audio/flac',
+  // Video
+  'video/mp4', 'video/mpeg', 'video/mov', 'video/avi', 'video/x-flv', 'video/mpg', 'video/webm', 'video/wmv', 'video/3gpp',
+  // Text
+  'text/plain', 'text/html', 'text/css', 'text/javascript', 'text/markdown',
+]);
+
 // Download file from Supabase and convert to Gemini Part
-async function attachmentToGeminiPart(attachment: Attachment): Promise<Part | null> {
+async function attachmentToGeminiPart(attachment: Attachment): Promise<{ part: Part | null; skipped: boolean; reason?: string }> {
   try {
+    console.log(`[Gemini] Processing attachment: ${attachment.filename}, mime: ${attachment.mimeType}`);
+
+    // Check if MIME type is supported
+    if (!GEMINI_SUPPORTED_MIME_TYPES.has(attachment.mimeType)) {
+      console.log(`[Gemini] Skipping unsupported MIME type: ${attachment.mimeType}`);
+      return {
+        part: null,
+        skipped: true,
+        reason: `File type not supported for AI analysis: ${attachment.mimeType}. Supported: PDF, images, text files.`
+      };
+    }
+
     console.log(`[Gemini] Downloading attachment: ${attachment.filename} from ${attachment.storagePath}`);
 
     const { data, error } = await supabase.storage
@@ -132,7 +158,7 @@ async function attachmentToGeminiPart(attachment: Attachment): Promise<Part | nu
 
     if (error || !data) {
       console.error(`[Gemini] Failed to download ${attachment.filename}:`, error);
-      return null;
+      return { part: null, skipped: false };
     }
 
     const buffer = Buffer.from(await data.arrayBuffer());
@@ -142,14 +168,17 @@ async function attachmentToGeminiPart(attachment: Attachment): Promise<Part | nu
 
     // Gemini supports inline data for images, PDFs, etc.
     return {
-      inlineData: {
-        mimeType: attachment.mimeType,
-        data: base64,
+      part: {
+        inlineData: {
+          mimeType: attachment.mimeType,
+          data: base64,
+        },
       },
+      skipped: false,
     };
   } catch (error) {
     console.error(`[Gemini] Error processing attachment ${attachment.filename}:`, error);
-    return null;
+    return { part: null, skipped: false };
   }
 }
 
@@ -229,16 +258,20 @@ export async function POST(request: NextRequest) {
     // Process attachments for Gemini multimodal - NO parsing needed!
     const multimodalParts: Part[] = [];
     const attachmentDescriptions: string[] = [];
+    const skippedFiles: string[] = [];
 
     if (attachments && attachments.length > 0) {
       console.log(`[Chat API] Processing ${attachments.length} attachment(s) for Gemini multimodal`);
 
       for (const attachment of attachments) {
-        const part = await attachmentToGeminiPart(attachment);
-        if (part) {
-          multimodalParts.push(part);
+        const result = await attachmentToGeminiPart(attachment);
+        if (result.part) {
+          multimodalParts.push(result.part);
           attachmentDescriptions.push(`- ${attachment.filename} (${attachment.mimeType})`);
           console.log(`[Chat API] Added ${attachment.filename} to Gemini context`);
+        } else if (result.skipped) {
+          skippedFiles.push(`${attachment.filename}: ${result.reason}`);
+          console.log(`[Chat API] Skipped ${attachment.filename}: ${result.reason}`);
         }
       }
     }
@@ -303,12 +336,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Build document context for system prompt
-    const documentContext = multimodalParts.length > 0
-      ? `The student has attached ${multimodalParts.length} file(s) that you can see and read:\n${attachmentDescriptions.join('\n')}\n\nThese files are included as inline multimodal content in this message. Read and analyze them.`
-      : '';
+    let documentContext = '';
+    if (multimodalParts.length > 0) {
+      documentContext = `The student has attached ${multimodalParts.length} file(s) that you can see and read:\n${attachmentDescriptions.join('\n')}\n\nThese files are included as inline multimodal content in this message. Read and analyze them.`;
+    }
+    if (skippedFiles.length > 0) {
+      documentContext += `\n\nNote: Some attached files could not be analyzed (unsupported format):\n${skippedFiles.join('\n')}\nPlease let the student know they can share these files in a different format (PDF, images, or text).`;
+    }
 
     console.log(`[DEBUG] Document context: ${documentContext || '(none)'}`);
     console.log(`[DEBUG] Multimodal parts count: ${multimodalParts.length}`);
+    console.log(`[DEBUG] Skipped files: ${skippedFiles.length}`);
 
     // Log what's in each multimodal part
     multimodalParts.forEach((part, i) => {
