@@ -1,6 +1,10 @@
 [build]
 builder = "nixpacks"
 
+[build.env]
+# Force fresh installs to clear any stale cache
+NIXPACKS_NO_CACHE = "1"
+
 [deploy]
 healthcheckPath = "/api/agent/tools"
 healthcheckTimeout = 300
