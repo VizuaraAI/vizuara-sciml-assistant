@@ -95,6 +95,29 @@ export default function MentorInboxPage() {
   const [studentInfo, setStudentInfo] = useState<any>(null);
   const [isLoadingStudentInfo, setIsLoadingStudentInfo] = useState(false);
 
+  // Inactive students modal state
+  const [showInactiveModal, setShowInactiveModal] = useState(false);
+  const [inactiveStudents, setInactiveStudents] = useState<any[]>([]);
+  const [inactiveSummary, setInactiveSummary] = useState<any>(null);
+  const [isLoadingInactive, setIsLoadingInactive] = useState(false);
+  const [generatingFollowupFor, setGeneratingFollowupFor] = useState<string | null>(null);
+  const [followupMessage, setFollowupMessage] = useState<{ studentId: string; message: string } | null>(null);
+  const [isSendingFollowup, setIsSendingFollowup] = useState(false);
+  const [sendingVoiceNoteFor, setSendingVoiceNoteFor] = useState<string | null>(null);
+
+  // In-thread compose state
+  const [showThreadCompose, setShowThreadCompose] = useState(false);
+  const [threadComposeMessage, setThreadComposeMessage] = useState('');
+  const [isSendingThreadMessage, setIsSendingThreadMessage] = useState(false);
+
+  // Upload document modal state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadDocType, setUploadDocType] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadForStudent, setUploadForStudent] = useState(true); // True = for selected student, False = general resource
+
   // Fetch data on mount
   useEffect(() => {
     fetchStudents();
@@ -749,6 +772,193 @@ export default function MentorInboxPage() {
     }
   }
 
+  // Fetch inactive students
+  async function fetchInactiveStudents() {
+    setIsLoadingInactive(true);
+    try {
+      const res = await fetch('/api/engagement/inactive-students?minDays=3');
+      const data = await res.json();
+
+      if (data.success) {
+        setInactiveStudents(data.data.students);
+        setInactiveSummary(data.data.summary);
+      } else {
+        console.error('Failed to fetch inactive students:', data.error);
+      }
+    } catch (error) {
+      console.error('Failed to fetch inactive students:', error);
+    } finally {
+      setIsLoadingInactive(false);
+    }
+  }
+
+  // Generate follow-up message for a student
+  async function generateFollowup(studentId: string, daysSinceLastMessage: number) {
+    setGeneratingFollowupFor(studentId);
+    try {
+      const res = await fetch('/api/engagement/generate-followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, daysSinceLastMessage }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setFollowupMessage({
+          studentId,
+          message: data.data.generatedMessage,
+        });
+      } else {
+        alert(`Failed to generate follow-up: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to generate follow-up:', error);
+      alert('Failed to generate follow-up. Please try again.');
+    } finally {
+      setGeneratingFollowupFor(null);
+    }
+  }
+
+  // Send the follow-up message
+  async function sendFollowupMessage() {
+    if (!followupMessage) return;
+
+    setIsSendingFollowup(true);
+    try {
+      const res = await fetch('/api/engagement/send-followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: followupMessage.studentId,
+          message: followupMessage.message,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        playSuccessSound();
+        alert(data.data.message);
+        setFollowupMessage(null);
+        // Refresh inactive students list
+        await fetchInactiveStudents();
+      } else {
+        alert(`Failed to send follow-up: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to send follow-up:', error);
+      alert('Failed to send follow-up. Please try again.');
+    } finally {
+      setIsSendingFollowup(false);
+    }
+  }
+
+  // Send voice note to a student
+  async function sendVoiceNote(studentId: string) {
+    setSendingVoiceNoteFor(studentId);
+    try {
+      const res = await fetch('/api/engagement/send-voice-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, noteType: 'motivation' }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        playSuccessSound();
+        alert(data.data.message);
+        // Refresh inactive students list
+        await fetchInactiveStudents();
+      } else {
+        alert(`Failed to send voice note: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to send voice note:', error);
+      alert('Failed to send voice note. Please try again.');
+    } finally {
+      setSendingVoiceNoteFor(null);
+    }
+  }
+
+  // Send message in thread context
+  async function sendThreadMessage() {
+    if (!selectedStudent || !threadComposeMessage.trim()) return;
+
+    setIsSendingThreadMessage(true);
+    try {
+      const res = await fetch('/api/mentor/send-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: selectedStudent.id,
+          content: threadComposeMessage.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        playSuccessSound();
+        setShowThreadCompose(false);
+        setThreadComposeMessage('');
+        // Refresh messages
+        await fetchMessages(selectedStudent.id);
+      } else {
+        alert(`Failed to send message: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      alert('Failed to send message. Please try again.');
+    } finally {
+      setIsSendingThreadMessage(false);
+    }
+  }
+
+  // Upload document
+  async function uploadDocument() {
+    if (!uploadFile || !uploadDocType) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('documentType', uploadDocType);
+      formData.append('uploaderEmail', 'raj@vizuara.com'); // Mentor email
+      if (uploadDescription) {
+        formData.append('description', uploadDescription);
+      }
+      if (uploadForStudent && selectedStudent) {
+        formData.append('studentId', selectedStudent.id);
+      }
+
+      const res = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        playSuccessSound();
+        alert(data.data.message);
+        // Reset modal state
+        setShowUploadModal(false);
+        setUploadDocType(null);
+        setUploadFile(null);
+        setUploadDescription('');
+      } else {
+        alert(`Failed to upload: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to upload document:', error);
+      alert('Failed to upload document. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   // Parse timestamp as UTC
   function parseTimestamp(timestamp: string): Date {
     const utcTimestamp = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
@@ -862,6 +1072,27 @@ export default function MentorInboxPage() {
               </button>
             </>
           )}
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-sm font-medium hover:bg-green-200 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Upload Document
+          </button>
+          <button
+            onClick={() => {
+              setShowInactiveModal(true);
+              fetchInactiveStudents();
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-full text-sm font-medium hover:bg-red-200 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Check Inactive Students
+          </button>
           <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium" style={{ backgroundColor: '#1d1d1f' }}>
             RD
           </div>
@@ -1154,14 +1385,27 @@ export default function MentorInboxPage() {
                       Conversation with {selectedStudent?.name} • {selectedThread.messages.length} message{selectedThread.messages.length > 1 ? 's' : ''}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setSelectedThread(null)}
-                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {!selectedThread.hasDraft && (
+                      <button
+                        onClick={() => setShowThreadCompose(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                        </svg>
+                        Reply in Thread
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setSelectedThread(null)}
+                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1357,6 +1601,65 @@ export default function MentorInboxPage() {
                     )}
                   </div>
                 ))}
+
+                {/* In-Thread Compose Area */}
+                {showThreadCompose && (
+                  <div className="bg-white rounded-xl border border-blue-200 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-blue-100 bg-blue-50/50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium bg-gradient-to-br from-slate-600 to-slate-800">
+                          RD
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-800">Dr. Raj Dandekar (You)</p>
+                          <p className="text-xs text-slate-500">Replying to {selectedStudent?.name}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <textarea
+                        value={threadComposeMessage}
+                        onChange={e => setThreadComposeMessage(e.target.value)}
+                        placeholder="Write your reply..."
+                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl resize-none outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800 leading-relaxed min-h-[150px]"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="p-4 border-t border-slate-100 flex justify-end gap-3">
+                      <button
+                        onClick={() => {
+                          setShowThreadCompose(false);
+                          setThreadComposeMessage('');
+                        }}
+                        className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium text-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={sendThreadMessage}
+                        disabled={isSendingThreadMessage || !threadComposeMessage.trim()}
+                        className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 flex items-center gap-2 text-sm"
+                      >
+                        {isSendingThreadMessage ? (
+                          <>
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                            Send Reply
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -2255,6 +2558,508 @@ export default function MentorInboxPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inactive Students Modal */}
+      {showInactiveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[85vh] flex flex-col">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Inactive Students</h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Students who need a follow-up message
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowInactiveModal(false);
+                    setFollowupMessage(null);
+                  }}
+                  className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Summary badges */}
+              {inactiveSummary && (
+                <div className="flex gap-2 mt-4">
+                  {inactiveSummary.critical > 0 && (
+                    <span className="px-2.5 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+                      {inactiveSummary.critical} Critical (14+ days)
+                    </span>
+                  )}
+                  {inactiveSummary.high > 0 && (
+                    <span className="px-2.5 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
+                      {inactiveSummary.high} High (7-13 days)
+                    </span>
+                  )}
+                  {inactiveSummary.medium > 0 && (
+                    <span className="px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
+                      {inactiveSummary.medium} Medium (3-6 days)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {isLoadingInactive ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : inactiveStudents.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-600 font-medium">All students are active!</p>
+                  <p className="text-sm text-slate-400 mt-1">No students need a follow-up right now.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {inactiveStudents.map((student) => (
+                    <div
+                      key={student.studentId}
+                      className={`rounded-xl border p-4 ${
+                        student.urgency === 'critical'
+                          ? 'border-red-200 bg-red-50'
+                          : student.urgency === 'high'
+                          ? 'border-orange-200 bg-orange-50'
+                          : 'border-amber-200 bg-amber-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-medium ${
+                            student.currentPhase === 'phase1'
+                              ? 'bg-gradient-to-br from-blue-400 to-blue-600'
+                              : 'bg-gradient-to-br from-emerald-400 to-emerald-600'
+                          }`}>
+                            {student.studentName.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-medium text-slate-800">{student.studentName}</p>
+                            <p className="text-xs text-slate-500">{student.studentEmail}</p>
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                student.currentPhase === 'phase1'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-emerald-100 text-emerald-700'
+                              }`}>
+                                {student.currentPhase === 'phase1' ? 'Phase I' : 'Phase II'}
+                              </span>
+                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                student.urgency === 'critical'
+                                  ? 'bg-red-200 text-red-800'
+                                  : student.urgency === 'high'
+                                  ? 'bg-orange-200 text-orange-800'
+                                  : 'bg-amber-200 text-amber-800'
+                              }`}>
+                                {student.daysSinceLastMessage} days inactive
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1.5">
+                              Last message: {student.lastMessageAtFormatted}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={() => generateFollowup(student.studentId, student.daysSinceLastMessage)}
+                            disabled={generatingFollowupFor === student.studentId}
+                            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {generatingFollowupFor === student.studentId ? (
+                              <>
+                                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                                Send Follow-up
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => sendVoiceNote(student.studentId)}
+                            disabled={sendingVoiceNoteFor === student.studentId}
+                            className="px-3 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {sendingVoiceNoteFor === student.studentId ? (
+                              <>
+                                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                                Sending...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                </svg>
+                                Send Dr. Raj's Voice Note
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Follow-up message preview */}
+                      {followupMessage && followupMessage.studentId === student.studentId && (
+                        <div className="mt-4 pt-4 border-t border-slate-200">
+                          <p className="text-xs font-medium text-slate-600 mb-2">Generated Follow-up Message:</p>
+                          <div className="bg-white rounded-lg border border-slate-200 p-3">
+                            <textarea
+                              value={followupMessage.message}
+                              onChange={(e) => setFollowupMessage({ studentId: followupMessage.studentId, message: e.target.value })}
+                              className="w-full text-sm text-slate-700 resize-none border-0 focus:ring-0 p-0"
+                              rows={6}
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2 mt-3">
+                            <button
+                              onClick={() => setFollowupMessage(null)}
+                              className="px-3 py-1.5 text-slate-600 text-xs font-medium hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={sendFollowupMessage}
+                              disabled={isSendingFollowup}
+                              className="px-4 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                            >
+                              {isSendingFollowup ? (
+                                <>
+                                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                  </svg>
+                                  Sending...
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                  </svg>
+                                  Send Message
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-slate-200 flex justify-between items-center">
+              <button
+                onClick={fetchInactiveStudents}
+                disabled={isLoadingInactive}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium flex items-center gap-2"
+              >
+                <svg className={`w-4 h-4 ${isLoadingInactive ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+              <button
+                onClick={() => {
+                  setShowInactiveModal(false);
+                  setFollowupMessage(null);
+                }}
+                className="px-4 py-2 bg-slate-800 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Document Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Upload Document</h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    {selectedStudent ? `For ${selectedStudent.name}` : 'Select a document type to upload'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setUploadDocType(null);
+                    setUploadFile(null);
+                    setUploadDescription('');
+                  }}
+                  className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Document Type Selection */}
+              {!uploadDocType ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-slate-700">What type of document are you uploading?</p>
+
+                  <button
+                    onClick={() => setUploadDocType('roadmap')}
+                    className="w-full p-4 border-2 border-slate-200 rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800">Research Roadmap Document</p>
+                        <p className="text-xs text-slate-500">Upload a research roadmap or project plan</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setUploadDocType('research_interests')}
+                    className="w-full p-4 border-2 border-slate-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800">Research Interests Document</p>
+                        <p className="text-xs text-slate-500">Upload student's research interests or proposal</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setUploadDocType('knowledge_resource')}
+                    className="w-full p-4 border-2 border-slate-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800">Knowledge Resource</p>
+                        <p className="text-xs text-slate-500">Upload educational material or reference document</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setUploadDocType('manuscript')}
+                    className="w-full p-4 border-2 border-slate-200 rounded-xl hover:border-amber-400 hover:bg-amber-50 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800">Manuscript Draft</p>
+                        <p className="text-xs text-slate-500">Upload a research paper draft for review</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setUploadDocType('other')}
+                    className="w-full p-4 border-2 border-slate-200 rounded-xl hover:border-slate-400 hover:bg-slate-50 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800">Other Document</p>
+                        <p className="text-xs text-slate-500">Upload any other type of document</p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              ) : (
+                /* File Upload Form */
+                <div className="space-y-4">
+                  <button
+                    onClick={() => {
+                      setUploadDocType(null);
+                      setUploadFile(null);
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to document types
+                  </button>
+
+                  <div className={`p-3 rounded-lg ${
+                    uploadDocType === 'roadmap' ? 'bg-purple-50 border border-purple-200' :
+                    uploadDocType === 'research_interests' ? 'bg-blue-50 border border-blue-200' :
+                    uploadDocType === 'knowledge_resource' ? 'bg-green-50 border border-green-200' :
+                    uploadDocType === 'manuscript' ? 'bg-amber-50 border border-amber-200' :
+                    'bg-slate-50 border border-slate-200'
+                  }`}>
+                    <p className="text-sm font-medium capitalize text-slate-700">
+                      {uploadDocType.replace('_', ' ')}
+                    </p>
+                  </div>
+
+                  {/* Target Selection */}
+                  {selectedStudent && (
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={uploadForStudent}
+                          onChange={() => setUploadForStudent(true)}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-slate-700">For {selectedStudent.name}</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          checked={!uploadForStudent}
+                          onChange={() => setUploadForStudent(false)}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="text-sm text-slate-700">General resource</span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* File Input */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Select File
+                    </label>
+                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-slate-400 transition-colors">
+                      <input
+                        type="file"
+                        onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                        id="file-upload"
+                        accept=".pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.xls,.xlsx,.txt,.md"
+                      />
+                      <label htmlFor="file-upload" className="cursor-pointer">
+                        {uploadFile ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div className="text-left">
+                              <p className="text-sm font-medium text-slate-800">{uploadFile.name}</p>
+                              <p className="text-xs text-slate-500">
+                                {(uploadFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <svg className="w-10 h-10 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            <p className="text-sm text-slate-600">Click to select a file</p>
+                            <p className="text-xs text-slate-400 mt-1">PDF, Images, Word, Excel (max 50MB)</p>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Description (optional)
+                    </label>
+                    <textarea
+                      value={uploadDescription}
+                      onChange={(e) => setUploadDescription(e.target.value)}
+                      placeholder="Add a description for this document..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {uploadDocType && (
+              <div className="p-6 border-t border-slate-200 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setUploadDocType(null);
+                    setUploadFile(null);
+                    setUploadDescription('');
+                  }}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={uploadDocument}
+                  disabled={!uploadFile || isUploading}
+                  className="px-5 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isUploading ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Upload Document
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

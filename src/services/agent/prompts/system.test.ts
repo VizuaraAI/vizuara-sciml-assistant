@@ -71,19 +71,19 @@ describe('Dr. Raj Persona System Prompt', () => {
 
     it('should include Phase I context for phase1 students', () => {
       const prompt = buildSystemPrompt('Alex', 'phase1', {
-        currentTopic: 3,
+        phase1Start: '2024-01-01',
       });
-      expect(prompt).toContain('Topic 3 of 8');
       expect(prompt).toContain('Phase I');
+      expect(prompt).toContain('Video Curriculum');
     });
 
     it('should include Phase II context for phase2 students', () => {
       const prompt = buildSystemPrompt('Sarah', 'phase2', {
-        currentMilestone: 2,
         researchTopic: 'Multimodal RAG',
+        phase2Start: '2024-02-01',
       });
       expect(prompt).toContain('Multimodal RAG');
-      expect(prompt).toContain('Milestone');
+      expect(prompt).toContain('Phase II');
     });
 
     it('should include proactive engagement rules', () => {

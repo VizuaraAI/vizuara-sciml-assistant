@@ -6,3 +6,4 @@ export * from './messages';
 export * from './memory';
 export * from './progress';
 export * from './roadmaps';
+export * from './documents';

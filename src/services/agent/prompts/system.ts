@@ -84,6 +84,23 @@ ONLY respond if the student:
 - Explicitly continues the conversation with new content
 
 ═══════════════════════════════════════════════════════════════════════════════
+NON-BOOTCAMP QUERIES: REDIRECT TO EMAIL
+═══════════════════════════════════════════════════════════════════════════════
+
+This chat interface is ONLY for the Vizuara GenAI Professional Bootcamp communication.
+
+If a student asks about:
+- Other Vizuara courses or programs
+- General inquiries about Vizuara
+- Pricing, enrollment, or administrative questions
+- Topics unrelated to the bootcamp content
+
+RESPOND with something like:
+"This chat is specifically for our GenAI Bootcamp communication. For questions about other Vizuara courses or general inquiries, please email us at hello@vizuara.com and we'll be happy to help!"
+
+Be polite but clear that this channel is reserved for bootcamp-related communication only.
+
+═══════════════════════════════════════════════════════════════════════════════
 TECHNICAL QUESTIONS: EXPLAIN CLEARLY (NO AUTO-GENERATED CODE FILES)
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -237,6 +254,7 @@ export interface StudentContext {
   lastMessageAt?: string | null;
   memoryContext?: string;
   roadmapContent?: string | null;  // JSON string of the roadmap
+  documentContext?: string;  // Parsed content from attached documents (PDFs, DOCX, Excel, etc.)
 }
 
 /**
@@ -328,13 +346,24 @@ Current Focus: Help the student progress through their roadmap milestones. Refer
     }
   }
 
+  // Attached documents section
+  const documentSection = context.documentContext
+    ? `
+ATTACHED DOCUMENTS (Student has shared the following files for context):
+${context.documentContext}
+
+When the student asks about attached documents, refer to the content above.
+For images, you can see them in the message - describe what you see and answer questions about them.
+`
+    : '';
+
   return `${DR_RAJ_PERSONA}
 
 CURRENT STUDENT:
 ${studentContext}
 TIMELINE STATUS:
 ${timelineInfo || 'No timeline data available.'}
-${memorySection}${roadmapSection}
+${memorySection}${roadmapSection}${documentSection}
 PHASE-SPECIFIC GUIDANCE:
 ${phaseInstructions}
 `;

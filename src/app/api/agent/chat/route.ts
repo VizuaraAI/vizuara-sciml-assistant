@@ -1,6 +1,7 @@
 /**
  * Chat API Endpoint
  * POST /api/agent/chat - Process message through agent with full tool execution
+ * Supports multimodal inputs: text, PDFs, DOCX, Excel, images
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,6 +11,7 @@ import { buildSystemPrompt } from '@/services/agent/prompts/system';
 import { getPhase1Tools, getPhase2Tools, createPhase1ToolRegistry, createPhase2ToolRegistry } from '@/services/agent/tools';
 import type { Tool } from '@/services/agent/tools/types';
 import { getStudentProfile, formatProfileForContext, updateMemoryFromConversation, getRecentDailyNotes } from '@/services/memory';
+import { parseMultipleDocuments, formatDocumentContext } from '@/services/files/document-parser';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -79,10 +81,22 @@ function isConversationEnding(message: string): boolean {
   return false;
 }
 
+// Attachment type for multimodal support
+interface Attachment {
+  storagePath: string;
+  mimeType: string;
+  filename: string;
+  publicUrl?: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { studentId, message } = body;
+    const { studentId, message, attachments } = body as {
+      studentId: string;
+      message: string;
+      attachments?: Attachment[];
+    };
 
     // Validate required fields
     if (!studentId || typeof studentId !== 'string') {
@@ -150,6 +164,47 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Chat API] Student: ${studentName}, Phase: ${phase}, Topic: ${student.current_topic_index}, Research: ${student.research_topic}`);
 
+    // Parse attached documents for multimodal context
+    let documentContext = '';
+    let imageContents: Array<{ type: 'image_url'; image_url: { url: string; detail: 'auto' } }> = [];
+
+    if (attachments && attachments.length > 0) {
+      console.log(`[Chat API] Processing ${attachments.length} attachment(s)`);
+
+      try {
+        const parsedDocs = await parseMultipleDocuments(attachments);
+
+        // Add text content from documents to context
+        if (parsedDocs.textContent) {
+          documentContext = formatDocumentContext(parsedDocs.textContent, parsedDocs.images.length);
+          console.log(`[Chat API] Parsed ${parsedDocs.textContent.length} characters of text from documents`);
+        }
+
+        // Prepare images for GPT-4o vision
+        for (const img of parsedDocs.images) {
+          imageContents.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${img.mimeType};base64,${img.base64}`,
+              detail: 'auto',
+            },
+          });
+        }
+
+        if (imageContents.length > 0) {
+          console.log(`[Chat API] Added ${imageContents.length} image(s) for vision processing`);
+        }
+
+        // Log any parsing errors
+        if (parsedDocs.errors.length > 0) {
+          console.warn('[Chat API] Document parsing errors:', parsedDocs.errors);
+        }
+      } catch (parseError) {
+        console.error('[Chat API] Failed to parse attachments:', parseError);
+        // Continue without attachments rather than failing the request
+      }
+    }
+
     // Load student's long-term memory profile (gracefully handle errors)
     let memoryContext = '';
     try {
@@ -212,7 +267,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build system prompt with timeline context, memory, and roadmap
+    // Build system prompt with timeline context, memory, roadmap, and document context
     const systemPrompt = buildSystemPrompt(studentName, phase, {
       researchTopic: student.research_topic,
       enrollmentDate: student.enrollment_date,
@@ -221,6 +276,7 @@ export async function POST(request: NextRequest) {
       lastMessageAt,
       memoryContext,
       roadmapContent: roadmapAccepted ? roadmapContent : null,  // Only include if student accepted
+      documentContext, // Include parsed document content
     });
 
     // Get tools and registry based on phase
@@ -229,11 +285,23 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Chat API] Tools available: ${tools.map(t => t.name).join(', ')}`);
 
-    // Build messages array
+    // Build messages array with multimodal support
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: message },
     ];
+
+    // If we have images, use multimodal content format for the user message
+    if (imageContents.length > 0) {
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: message },
+          ...imageContents,
+        ],
+      });
+    } else {
+      messages.push({ role: 'user', content: message });
+    }
 
     let totalInputTokens = 0;
     let totalOutputTokens = 0;

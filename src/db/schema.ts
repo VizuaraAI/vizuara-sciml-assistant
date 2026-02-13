@@ -105,6 +105,31 @@ export const roadmaps = pgTable('roadmaps', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Document type enum
+export const documentTypeEnum = pgEnum('document_type', [
+  'roadmap',           // Research roadmap document
+  'research_interests', // Student's research interests document
+  'knowledge_resource', // Educational/reference material
+  'manuscript',        // Research paper draft
+  'other',             // Other documents
+]);
+
+// Documents table (uploaded files)
+export const documents = pgTable('documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  studentId: uuid('student_id').references(() => students.id), // Optional - can be null for general resources
+  uploadedBy: uuid('uploaded_by').references(() => users.id).notNull(),
+  documentType: documentTypeEnum('document_type').notNull(),
+  filename: varchar('filename', { length: 500 }).notNull(),
+  originalFilename: varchar('original_filename', { length: 500 }).notNull(),
+  mimeType: varchar('mime_type', { length: 100 }).notNull(),
+  fileSize: integer('file_size').notNull(), // in bytes
+  storagePath: varchar('storage_path', { length: 1000 }).notNull(), // Supabase storage path
+  publicUrl: varchar('public_url', { length: 1000 }), // Public URL if applicable
+  description: text('description'), // Optional description
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // ============== RELATIONS ==============
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -163,6 +188,17 @@ export const roadmapsRelations = relations(roadmaps, ({ one }) => ({
   }),
 }));
 
+export const documentsRelations = relations(documents, ({ one }) => ({
+  student: one(students, {
+    fields: [documents.studentId],
+    references: [students.id],
+  }),
+  uploader: one(users, {
+    fields: [documents.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
 // ============== TYPES ==============
 
 export type User = typeof users.$inferSelect;
@@ -179,6 +215,8 @@ export type Progress = typeof progress.$inferSelect;
 export type NewProgress = typeof progress.$inferInsert;
 export type Roadmap = typeof roadmaps.$inferSelect;
 export type NewRoadmap = typeof roadmaps.$inferInsert;
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
 
 // Enum types
 export type UserRole = 'mentor' | 'student';
@@ -187,3 +225,4 @@ export type MessageRole = 'student' | 'agent' | 'mentor' | 'system';
 export type MessageStatus = 'draft' | 'approved' | 'sent';
 export type MemoryType = 'short_term' | 'long_term';
 export type ProgressStatus = 'not_started' | 'in_progress' | 'completed';
+export type DocumentType = 'roadmap' | 'research_interests' | 'knowledge_resource' | 'manuscript' | 'other';
