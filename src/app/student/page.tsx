@@ -51,6 +51,7 @@ export default function StudentInboxPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isSendingRef = useRef(false); // Track sending state for polling
 
   useEffect(() => {
     loadLoggedInStudent();
@@ -62,10 +63,14 @@ export default function StudentInboxPage() {
     }
   }, [student]);
 
-  // Poll for new messages
+  // Poll for new messages - but skip if currently sending to preserve optimistic update
   useEffect(() => {
     if (!student) return;
-    const interval = setInterval(() => fetchMessages(student.id), 10000);
+    const interval = setInterval(() => {
+      if (!isSendingRef.current) {
+        fetchMessages(student.id);
+      }
+    }, 10000);
     return () => clearInterval(interval);
   }, [student]);
 
@@ -306,6 +311,7 @@ export default function StudentInboxPage() {
 
     playSendSound();
     setIsSending(true);
+    isSendingRef.current = true; // Pause polling during send
 
     try {
       // First upload any attachments (must wait for this)
@@ -413,12 +419,13 @@ export default function StudentInboxPage() {
         const data = await res.json();
         if (!data.success) {
           console.error('Background send failed:', data.error);
-          // Could show a toast notification here
         }
-        // Refresh to get the real message from server
+        // Resume polling and refresh to get the real message from server
+        isSendingRef.current = false;
         fetchMessages(student.id);
       }).catch(err => {
         console.error('Background send error:', err);
+        isSendingRef.current = false; // Resume polling even on error
       });
 
     } catch (error) {
