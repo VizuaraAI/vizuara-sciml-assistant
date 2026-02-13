@@ -1,36 +1,68 @@
 /**
- * Chat API Endpoint
+ * Chat API Endpoint - Powered by Gemini 2.5 Pro
  * POST /api/agent/chat - Process message through agent with full tool execution
- * Supports multimodal inputs: text, PDFs, DOCX, Excel, images
+ * Supports native multimodal inputs: text, PDFs, images (no parsing needed!)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { GoogleGenerativeAI, Part, FunctionDeclaration, SchemaType } from '@google/generative-ai';
 import { buildSystemPrompt } from '@/services/agent/prompts/system';
 import { getPhase1Tools, getPhase2Tools, createPhase1ToolRegistry, createPhase2ToolRegistry } from '@/services/agent/tools';
 import type { Tool } from '@/services/agent/tools/types';
 import { getStudentProfile, formatProfileForContext, updateMemoryFromConversation, getRecentDailyNotes } from '@/services/memory';
-import { parseMultipleDocuments, formatDocumentContext } from '@/services/files/document-parser';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-function convertToolsToOpenAI(tools: Tool[]): OpenAI.Chat.ChatCompletionTool[] {
+// Convert our tool format to Gemini function declarations
+function convertToolsToGemini(tools: Tool[]): FunctionDeclaration[] {
   return tools.map((tool) => ({
-    type: 'function' as const,
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.input_schema,
-    },
+    name: tool.name,
+    description: tool.description,
+    parameters: convertSchemaToGemini(tool.input_schema),
   }));
+}
+
+// Convert JSON Schema to Gemini Schema format
+function convertSchemaToGemini(schema: any): any {
+  if (!schema) return undefined;
+
+  const geminiSchema: any = {};
+
+  if (schema.type === 'object') {
+    geminiSchema.type = SchemaType.OBJECT;
+    if (schema.properties) {
+      geminiSchema.properties = {};
+      for (const [key, value] of Object.entries(schema.properties)) {
+        geminiSchema.properties[key] = convertSchemaToGemini(value);
+      }
+    }
+    if (schema.required) {
+      geminiSchema.required = schema.required;
+    }
+  } else if (schema.type === 'string') {
+    geminiSchema.type = SchemaType.STRING;
+    if (schema.description) geminiSchema.description = schema.description;
+    if (schema.enum) geminiSchema.enum = schema.enum;
+  } else if (schema.type === 'number' || schema.type === 'integer') {
+    geminiSchema.type = SchemaType.NUMBER;
+    if (schema.description) geminiSchema.description = schema.description;
+  } else if (schema.type === 'boolean') {
+    geminiSchema.type = SchemaType.BOOLEAN;
+    if (schema.description) geminiSchema.description = schema.description;
+  } else if (schema.type === 'array') {
+    geminiSchema.type = SchemaType.ARRAY;
+    if (schema.items) {
+      geminiSchema.items = convertSchemaToGemini(schema.items);
+    }
+  }
+
+  return geminiSchema;
 }
 
 // Check if message is a conversation-ending statement that doesn't need a response
@@ -89,6 +121,38 @@ interface Attachment {
   publicUrl?: string;
 }
 
+// Download file from Supabase and convert to Gemini Part
+async function attachmentToGeminiPart(attachment: Attachment): Promise<Part | null> {
+  try {
+    console.log(`[Gemini] Downloading attachment: ${attachment.filename} from ${attachment.storagePath}`);
+
+    const { data, error } = await supabase.storage
+      .from('documents')
+      .download(attachment.storagePath);
+
+    if (error || !data) {
+      console.error(`[Gemini] Failed to download ${attachment.filename}:`, error);
+      return null;
+    }
+
+    const buffer = Buffer.from(await data.arrayBuffer());
+    const base64 = buffer.toString('base64');
+
+    console.log(`[Gemini] Downloaded ${attachment.filename}: ${buffer.length} bytes, mime: ${attachment.mimeType}`);
+
+    // Gemini supports inline data for images, PDFs, etc.
+    return {
+      inlineData: {
+        mimeType: attachment.mimeType,
+        data: base64,
+      },
+    };
+  } catch (error) {
+    console.error(`[Gemini] Error processing attachment ${attachment.filename}:`, error);
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -118,7 +182,6 @@ export async function POST(request: NextRequest) {
       console.log('[Chat API] Conversation-ending message detected, not generating response');
 
       // Still save the student message but don't create a draft
-      // Get conversation
       let { data: conversation } = await supabase
         .from('conversations')
         .select('id')
@@ -126,7 +189,6 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (conversation) {
-        // Save user message only
         await supabase.from('messages').insert({
           conversation_id: conversation.id,
           role: 'student',
@@ -164,55 +226,22 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Chat API] Student: ${studentName}, Phase: ${phase}, Topic: ${student.current_topic_index}, Research: ${student.research_topic}`);
 
-    // Parse attached documents for multimodal context
-    let documentContext = '';
-    let imageContents: Array<{ type: 'image_url'; image_url: { url: string; detail: 'auto' } }> = [];
+    // Process attachments for Gemini multimodal - NO parsing needed!
+    const multimodalParts: Part[] = [];
 
     if (attachments && attachments.length > 0) {
-      console.log(`[Chat API] Processing ${attachments.length} attachment(s):`, JSON.stringify(attachments, null, 2));
+      console.log(`[Chat API] Processing ${attachments.length} attachment(s) for Gemini multimodal`);
 
-      try {
-        console.log('[Chat API] Calling parseMultipleDocuments...');
-        const parsedDocs = await parseMultipleDocuments(attachments);
-        console.log('[Chat API] parseMultipleDocuments returned:', {
-          hasTextContent: !!parsedDocs.textContent,
-          textLength: parsedDocs.textContent?.length || 0,
-          imageCount: parsedDocs.images?.length || 0,
-          errorCount: parsedDocs.errors?.length || 0,
-        });
-
-        // Add text content from documents to context
-        if (parsedDocs.textContent) {
-          documentContext = formatDocumentContext(parsedDocs.textContent, parsedDocs.images.length);
-          console.log(`[Chat API] Parsed ${parsedDocs.textContent.length} characters of text from documents`);
+      for (const attachment of attachments) {
+        const part = await attachmentToGeminiPart(attachment);
+        if (part) {
+          multimodalParts.push(part);
+          console.log(`[Chat API] Added ${attachment.filename} to Gemini context`);
         }
-
-        // Prepare images for GPT-4o vision
-        for (const img of parsedDocs.images) {
-          imageContents.push({
-            type: 'image_url',
-            image_url: {
-              url: `data:${img.mimeType};base64,${img.base64}`,
-              detail: 'auto',
-            },
-          });
-        }
-
-        if (imageContents.length > 0) {
-          console.log(`[Chat API] Added ${imageContents.length} image(s) for vision processing`);
-        }
-
-        // Log any parsing errors
-        if (parsedDocs.errors.length > 0) {
-          console.warn('[Chat API] Document parsing errors:', parsedDocs.errors);
-        }
-      } catch (parseError) {
-        console.error('[Chat API] Failed to parse attachments:', parseError);
-        // Continue without attachments rather than failing the request
       }
     }
 
-    // Load student's long-term memory profile (gracefully handle errors)
+    // Load student's long-term memory profile
     let memoryContext = '';
     try {
       const studentProfile = await getStudentProfile(studentId);
@@ -220,17 +249,15 @@ export async function POST(request: NextRequest) {
         memoryContext = formatProfileForContext(studentProfile);
       }
 
-      // Load recent daily notes
       const recentNotes = await getRecentDailyNotes(studentId, 7);
       if (recentNotes.length > 0) {
         memoryContext += '\n\nRecent conversation notes:\n';
-        for (const note of recentNotes.slice(-5)) { // Last 5 notes
+        for (const note of recentNotes.slice(-5)) {
           memoryContext += `- ${note.date}: ${note.note}\n`;
         }
       }
     } catch (memoryLoadError) {
       console.warn('[Chat API] Failed to load memory context:', memoryLoadError);
-      // Continue without memory context
     }
 
     // Get last message timestamp for inactivity tracking
@@ -254,7 +281,7 @@ export async function POST(request: NextRequest) {
       lastMessageAt = lastMsg?.created_at || null;
     }
 
-    // Fetch roadmap from roadmaps table for Phase II students
+    // Fetch roadmap for Phase II students
     let roadmapContent: string | null = null;
     let roadmapAccepted = false;
     if (phase === 'phase2') {
@@ -268,13 +295,12 @@ export async function POST(request: NextRequest) {
 
       if (roadmap?.content) {
         roadmapContent = JSON.stringify(roadmap.content);
-        // Check both the column and the fallback in content JSON
         const contentObj = roadmap.content as any;
         roadmapAccepted = roadmap.accepted || contentObj?._accepted || false;
       }
     }
 
-    // Build system prompt with timeline context, memory, roadmap, and document context
+    // Build system prompt
     const systemPrompt = buildSystemPrompt(studentName, phase, {
       researchTopic: student.research_topic,
       enrollmentDate: student.enrollment_date,
@@ -282,8 +308,10 @@ export async function POST(request: NextRequest) {
       phase2Start: student.phase2_start,
       lastMessageAt,
       memoryContext,
-      roadmapContent: roadmapAccepted ? roadmapContent : null,  // Only include if student accepted
-      documentContext, // Include parsed document content
+      roadmapContent: roadmapAccepted ? roadmapContent : null,
+      documentContext: multimodalParts.length > 0
+        ? `\n\n[${multimodalParts.length} file(s) attached - you can see and analyze them directly]`
+        : '',
     });
 
     // Get tools and registry based on phase
@@ -292,130 +320,125 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Chat API] Tools available: ${tools.map(t => t.name).join(', ')}`);
 
-    // Build messages array with multimodal support
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
+    // Initialize Gemini model with function calling
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-pro-preview-05-06',
+      systemInstruction: systemPrompt,
+      tools: tools.length > 0 ? [{
+        functionDeclarations: convertToolsToGemini(tools),
+      }] : undefined,
+    });
+
+    // Build user message parts (text + any attachments)
+    const userParts: Part[] = [
+      { text: message },
+      ...multimodalParts,
     ];
 
-    // If we have images, use multimodal content format for the user message
-    if (imageContents.length > 0) {
-      messages.push({
-        role: 'user',
-        content: [
-          { type: 'text', text: message },
-          ...imageContents,
-        ],
-      });
-    } else {
-      messages.push({ role: 'user', content: message });
-    }
+    console.log(`[Chat API] Sending to Gemini with ${userParts.length} part(s)`);
 
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
+    // Start chat and send message
+    const chat = model.startChat({
+      generationConfig: {
+        maxOutputTokens: 4096,
+        temperature: 0.7,
+      },
+    });
+
     let finalContent = '';
     let allToolCalls: any[] = [];
     let iterations = 0;
     const maxIterations = 5;
 
+    // Send initial message
+    let result = await chat.sendMessage(userParts);
+    let response = result.response;
+
     // Tool execution loop
     while (iterations < maxIterations) {
       iterations++;
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        max_tokens: 4096,
-        temperature: 0.7,
-        messages,
-        tools: tools.length > 0 ? convertToolsToOpenAI(tools) : undefined,
-        tool_choice: tools.length > 0 ? 'auto' : undefined,
-      });
+      const candidates = response.candidates;
+      if (!candidates || candidates.length === 0) break;
 
-      totalInputTokens += response.usage?.prompt_tokens || 0;
-      totalOutputTokens += response.usage?.completion_tokens || 0;
+      const content = candidates[0].content;
+      const parts = content.parts;
 
-      const choice = response.choices[0];
-      const assistantMessage = choice.message;
+      // Check for function calls
+      const functionCalls = parts.filter(p => 'functionCall' in p);
 
-      // If there's content, accumulate it
-      if (assistantMessage.content) {
-        finalContent += assistantMessage.content;
-      }
-
-      // If no tool calls, we're done
-      if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+      if (functionCalls.length === 0) {
+        // No function calls - extract text response
+        for (const part of parts) {
+          if ('text' in part && part.text) {
+            finalContent += part.text;
+          }
+        }
         break;
       }
 
-      // Add assistant message with tool calls to history
-      messages.push({
-        role: 'assistant',
-        content: assistantMessage.content || null,
-        tool_calls: assistantMessage.tool_calls,
-      });
+      // Execute function calls
+      const functionResponses: Part[] = [];
 
-      // Execute each tool and add results
-      for (const toolCall of assistantMessage.tool_calls) {
-        // Handle both function and custom tool calls
-        const toolName = 'function' in toolCall ? toolCall.function.name : (toolCall as any).name;
-        const toolArgs = 'function' in toolCall ? toolCall.function.arguments : (toolCall as any).arguments;
-        const toolInput = JSON.parse(toolArgs || '{}');
+      for (const part of functionCalls) {
+        if ('functionCall' in part) {
+          const { name, args } = part.functionCall;
+          console.log(`[Chat API] Executing tool: ${name}`, args);
 
-        // Execute the tool with full context
-        let toolResult: string;
-        let toolResultParsed: any = null;
-        try {
-          if (toolRegistry.hasTool(toolName)) {
-            const result = await toolRegistry.execute(toolName, toolInput, {
-              studentId,
-              currentPhase: phase,
-            });
-            toolResultParsed = result;
-            toolResult = JSON.stringify(result, null, 2);
-          } else {
-            toolResult = JSON.stringify({ error: `Unknown tool: ${toolName}` });
+          let toolResult: any;
+          try {
+            if (toolRegistry.hasTool(name)) {
+              toolResult = await toolRegistry.execute(name, args || {}, {
+                studentId,
+                currentPhase: phase,
+              });
+            } else {
+              toolResult = { error: `Unknown tool: ${name}` };
+            }
+          } catch (error) {
+            toolResult = {
+              error: error instanceof Error ? error.message : 'Tool execution failed'
+            };
           }
-        } catch (error) {
-          toolResult = JSON.stringify({
-            error: error instanceof Error ? error.message : 'Tool execution failed'
+
+          allToolCalls.push({
+            name,
+            input: args,
+            result: toolResult,
+          });
+
+          functionResponses.push({
+            functionResponse: {
+              name,
+              response: toolResult,
+            },
           });
         }
+      }
 
-        // Store tool call with its result for the client
-        allToolCalls.push({
-          id: toolCall.id,
-          name: toolName,
-          input: toolInput,
-          result: toolResultParsed,
-        });
+      // Send function responses back to Gemini
+      result = await chat.sendMessage(functionResponses);
+      response = result.response;
+    }
 
-        // Add tool result to messages
-        messages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: toolResult,
-        });
+    // If still no content after tool calls, get final response text
+    if (!finalContent) {
+      const candidates = response.candidates;
+      if (candidates && candidates.length > 0) {
+        for (const part of candidates[0].content.parts) {
+          if ('text' in part && part.text) {
+            finalContent += part.text;
+          }
+        }
       }
     }
 
-    // If we still have no content after tool calls, make one more call
-    if (!finalContent && allToolCalls.length > 0) {
-      const finalResponse = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        max_tokens: 4096,
-        temperature: 0.7,
-        messages,
-      });
-
-      totalInputTokens += finalResponse.usage?.prompt_tokens || 0;
-      totalOutputTokens += finalResponse.usage?.completion_tokens || 0;
-
-      finalContent = finalResponse.choices[0].message.content || '';
-    }
-
-    // Clean up the response - remove double asterisks for a more natural look
+    // Clean up the response
     finalContent = finalContent
-      .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove **bold** markers
-      .replace(/\*([^*]+)\*/g, '$1');    // Remove *italic* markers
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1');
+
+    console.log(`[Chat API] Gemini response: ${finalContent.length} chars, ${allToolCalls.length} tool calls`);
 
     // Create draft in database
     const draftId = crypto.randomUUID();
@@ -456,13 +479,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Update long-term memory with conversation insights
+    // Update long-term memory
     try {
       await updateMemoryFromConversation(studentId, message, finalContent);
       console.log(`[Chat API] Memory updated for student ${studentId}`);
     } catch (memoryError) {
       console.error('[Chat API] Failed to update memory:', memoryError);
-      // Don't fail the request if memory update fails
     }
 
     return NextResponse.json({
@@ -473,10 +495,7 @@ export async function POST(request: NextRequest) {
         toolCalls: allToolCalls,
         createdAt: new Date().toISOString(),
       },
-      tokensUsed: {
-        input: totalInputTokens,
-        output: totalOutputTokens,
-      },
+      model: 'gemini-2.5-pro',
     });
   } catch (error) {
     console.error('Chat API error:', error);
