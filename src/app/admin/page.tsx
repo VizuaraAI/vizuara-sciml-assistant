@@ -21,6 +21,7 @@ interface OnboardedStudent {
   joiningDate: string;
   endDate: string;
   welcomeMessage: string;
+  emailSent?: boolean;
 }
 
 export default function AdminDashboard() {
@@ -37,6 +38,8 @@ export default function AdminDashboard() {
   // Result state
   const [onboardedStudent, setOnboardedStudent] = useState<OnboardedStudent | null>(null);
   const [error, setError] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   useEffect(() => {
     fetchStudents();
@@ -101,6 +104,40 @@ export default function AdminDashboard() {
   function copyToClipboard(text: string) {
     playClickSound();
     navigator.clipboard.writeText(text);
+  }
+
+  async function handleSendWelcomeEmail() {
+    if (!onboardedStudent) return;
+
+    setIsSendingEmail(true);
+    setEmailError('');
+    playClickSound();
+
+    try {
+      const res = await fetch('/api/admin/send-welcome-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: onboardedStudent.email,
+          preferredName: onboardedStudent.preferredName,
+          email: onboardedStudent.email,
+          password: onboardedStudent.password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        playSuccessSound();
+        setOnboardedStudent({ ...onboardedStudent, emailSent: true });
+      } else {
+        setEmailError(data.error || 'Failed to send email');
+      }
+    } catch (err) {
+      setEmailError('Failed to send email. Please try again.');
+    } finally {
+      setIsSendingEmail(false);
+    }
   }
 
   return (
@@ -285,6 +322,44 @@ export default function AdminDashboard() {
                     <p className="text-[#424245] text-sm whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">
                       {onboardedStudent.welcomeMessage}
                     </p>
+                  </div>
+
+                  {/* Send Welcome Email Button */}
+                  <div className="mt-4 pt-4 border-t border-[#bbf7d0]">
+                    {emailError && (
+                      <div className="mb-3 p-2 bg-[#fff5f5] border border-[#fed7d7] rounded-lg text-[#c53030] text-sm">
+                        {emailError}
+                      </div>
+                    )}
+
+                    {onboardedStudent.emailSent ? (
+                      <div className="flex items-center gap-2 text-[#15803d]">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-medium">Welcome email sent successfully!</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleSendWelcomeEmail}
+                        disabled={isSendingEmail}
+                        className="w-full py-3 bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isSendingEmail ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Sending Email...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            Send Welcome Email to {onboardedStudent.preferredName}
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
