@@ -263,9 +263,15 @@ export default function StudentInboxPage() {
 
   // Handle file selection
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    console.log('handleFileSelect called', e.target.files);
     const files = e.target.files;
-    if (files) {
-      setAttachments(prev => [...prev, ...Array.from(files)]);
+    if (files && files.length > 0) {
+      console.log('Adding files:', Array.from(files).map(f => f.name));
+      setAttachments(prev => {
+        const newAttachments = [...prev, ...Array.from(files)];
+        console.log('New attachments state:', newAttachments.map(f => f.name));
+        return newAttachments;
+      });
     }
     // Reset input so same file can be selected again
     if (fileInputRef.current) {
@@ -613,7 +619,10 @@ export default function StudentInboxPage() {
 
               <div className="p-4 border-t border-slate-200/60 bg-white/80 flex items-center justify-between">
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => {
+                    console.log('Attach button clicked, fileInputRef:', fileInputRef.current);
+                    fileInputRef.current?.click();
+                  }}
                   className={`relative flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
                     attachments.length > 0
                       ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
