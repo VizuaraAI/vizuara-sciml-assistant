@@ -384,7 +384,7 @@ export default function StudentInboxPage() {
         type="file"
         ref={fileInputRef}
         onChange={handleFileSelect}
-        className="hidden"
+        style={{ position: 'absolute', left: '-9999px', opacity: 0 }}
         multiple
         accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.py,.js,.ts,.jsx,.tsx,.json,.csv,.png,.jpg,.jpeg,.gif,.webp,.jl,.ipynb"
       />
