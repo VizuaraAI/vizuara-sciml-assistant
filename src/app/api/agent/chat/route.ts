@@ -443,6 +443,10 @@ export async function POST(request: NextRequest) {
       if (!candidates || candidates.length === 0) break;
 
       const content = candidates[0].content;
+      if (!content || !content.parts) {
+        console.log('[Chat API] No content or parts in response, breaking loop');
+        break;
+      }
       const parts = content.parts;
 
       // Check for function calls
