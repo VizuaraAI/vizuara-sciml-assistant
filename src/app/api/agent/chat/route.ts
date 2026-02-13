@@ -220,17 +220,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if this is a conversation-ending message - save and return early
+    // SAVE STUDENT MESSAGE IMMEDIATELY - so it appears in their chat right away
+    const studentMessageData: any = {
+      conversation_id: conversation.id,
+      role: 'student',
+      content: message,
+      status: 'sent',
+    };
+
+    if (attachments && attachments.length > 0) {
+      studentMessageData.attachments = attachments.map(a => ({
+        filename: a.filename,
+        url: a.publicUrl || '',
+        mimeType: a.mimeType,
+        storagePath: a.storagePath,
+      }));
+    }
+
+    await supabase.from('messages').insert(studentMessageData);
+    console.log(`[Chat API] Student message saved immediately for conversation ${conversation.id}`);
+
+    // Check if this is a conversation-ending message - no AI response needed
     if (isConversationEnding(message)) {
       console.log('[Chat API] Conversation-ending message detected, not generating response');
-
-      await supabase.from('messages').insert({
-        conversation_id: conversation.id,
-        role: 'student',
-        content: message,
-        status: 'sent',
-      });
-
       return NextResponse.json({
         success: true,
         noResponseNeeded: true,
@@ -489,27 +501,7 @@ export async function POST(request: NextRequest) {
       .eq('role', 'agent')
       .eq('status', 'draft');
 
-    // Build student message data with attachments
-    const studentMessageData: any = {
-      conversation_id: conversation.id,
-      role: 'student',
-      content: message,
-      status: 'sent',
-    };
-
-    if (attachments && attachments.length > 0) {
-      studentMessageData.attachments = attachments.map(a => ({
-        filename: a.filename,
-        url: a.publicUrl || '',
-        mimeType: a.mimeType,
-        storagePath: a.storagePath,
-      }));
-    }
-
-    // Save student message
-    await supabase.from('messages').insert(studentMessageData);
-
-    // Save agent response as draft
+    // Save agent response as draft (student message was already saved at the start)
     await supabase.from('messages').insert({
       id: draftId,
       conversation_id: conversation.id,
