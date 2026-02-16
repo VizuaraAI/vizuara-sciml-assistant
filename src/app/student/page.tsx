@@ -467,7 +467,7 @@ export default function StudentInboxPage() {
             className="w-10 h-10 object-contain"
           />
           <div>
-            <h1 className="text-lg font-semibold text-slate-800">Vizuara Generative AI Bootcamp</h1>
+            <h1 className="text-lg font-semibold text-slate-800">Vizuara Scientific ML Bootcamp</h1>
             <p className="text-sm text-slate-500">{student?.name || 'Student Portal'}</p>
           </div>
         </div>

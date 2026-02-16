@@ -153,7 +153,7 @@ export default function AdminDashboard() {
             />
             <div>
               <h1 className="text-xl font-semibold text-[#1d1d1f]">Admin Dashboard</h1>
-              <p className="text-sm text-[#86868b]">GenAI Bootcamp - Student Onboarding</p>
+              <p className="text-sm text-[#86868b]">Scientific ML Bootcamp - Student Onboarding</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -313,7 +313,7 @@ export default function AdminDashboard() {
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-xs text-[#86868b]">Email Preview (will be sent)</p>
                       <button
-                        onClick={() => copyToClipboard(`Hello ${onboardedStudent.preferredName}!\n\nLet us get started with the Generative AI Bootcamp.\n\nLogin here: https://vizuara-genai-assistant-production.up.railway.app/student\n\nEmail: ${onboardedStudent.email}\nPassword: ${onboardedStudent.password}\n\nWhen you log in to this website, you will already see an onboarding email with the next steps of action. All our communication will happen on this website.\n\nLet us get started.\n\nBest regards,\nDr Raj Dandekar`)}
+                        onClick={() => copyToClipboard(`Hello ${onboardedStudent.preferredName}!\n\nLet us get started with the Scientific ML Bootcamp.\n\nLogin here: https://vizuara-sciml-assistant-production.up.railway.app/student\n\nEmail: ${onboardedStudent.email}\nPassword: ${onboardedStudent.password}\n\nWhen you log in to this website, you will already see an onboarding email with the next steps of action. All our communication will happen on this website.\n\nLet us get started.\n\nBest regards,\nDr. Raj Dandekar`)}
                         className="text-xs text-[#0071e3] hover:text-[#0077ed] font-medium"
                       >
                         Copy Message
@@ -322,9 +322,9 @@ export default function AdminDashboard() {
                     <p className="text-[#424245] text-sm whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">
 {`Hello ${onboardedStudent.preferredName}!
 
-Let us get started with the Generative AI Bootcamp.
+Let us get started with the Scientific ML Bootcamp.
 
-Login here: https://vizuara-genai-assistant-production.up.railway.app/student
+Login here: https://vizuara-sciml-assistant-production.up.railway.app/student
 
 Email: ${onboardedStudent.email}
 Password: ${onboardedStudent.password}
@@ -334,7 +334,7 @@ When you log in to this website, you will already see an onboarding email with t
 Let us get started.
 
 Best regards,
-Dr Raj Dandekar`}
+Dr. Raj Dandekar`}
                     </p>
                   </div>
 

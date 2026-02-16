@@ -63,7 +63,7 @@ export default function LoginPage() {
               Sign in
             </h1>
             <p className="text-[17px] text-[#86868b] mt-2">
-              GenAI Professional Bootcamp
+              Scientific ML Bootcamp
             </p>
           </div>
 

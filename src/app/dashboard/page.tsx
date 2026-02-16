@@ -23,11 +23,11 @@ interface Message {
   timestamp: string;
 }
 
-const WELCOME_MESSAGE = `Welcome to the Generative AI Professional Bootcamp!
+const WELCOME_MESSAGE = `Welcome to the Scientific Machine Learning Bootcamp!
 
-**Phase I (1.5 months):** Complete the video curriculum - 8 topics including LLM Foundations, Prompt Engineering, Agents, Semantic Search, RAG, and Multimodal LLMs.
+**Phase I (1.5 months):** Complete the video curriculum - 8 topics including Julia programming, ODEs, PDEs, Neural Networks, PINNs, Neural ODEs, and UDEs.
 
-**Phase II (2.5 months):** Work on your research project and publish a paper.
+**Phase II (2.5 months):** Work on your research project and publish a paper in Scientific ML.
 
 Let me know if you have any questions!`;
 

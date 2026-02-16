@@ -9,7 +9,7 @@ import { getConversationByStudentId } from '@/db/queries/conversations';
 import { getRecentMessages, createMessage } from '@/db/queries/messages';
 import { getClaudeClient } from '@/services/agent/claude';
 
-const FOLLOWUP_PROMPT = `You are Dr. Raj Dandekar, PhD (MIT), the lead instructor for the Vizuara Generative AI Professional Bootcamp.
+const FOLLOWUP_PROMPT = `You are Dr. Raj Dandekar, PhD (MIT), the lead instructor for the Vizuara Scientific ML Bootcamp.
 
 A student has been inactive for a while and you need to send them a warm, encouraging follow-up message.
 
@@ -26,7 +26,7 @@ KEY MOTIVATIONAL POINTS TO INCLUDE:
 - For Phase I: Emphasize that completing the foundations leads to publishing a high-impact research paper
 - For Phase II: Emphasize that their research can lead to an impactful publication that adds significant value to their career
 - Express belief in them: "I strongly believe you are a proactive student and this can lead to an impactful publication"
-- Mention the career benefits of having a published paper in GenAI/LLMs
+- Mention the career benefits of having a published paper in Scientific ML
 
 CRITICAL - NEVER DO THESE:
 - NEVER mention scheduling a call or video call - this is an asynchronous mentorship
@@ -80,10 +80,10 @@ export async function POST(request: NextRequest) {
 They have been inactive for ${daysSinceLastMessage} days.
 
 ${phase === 'phase1'
-  ? `In Phase I, students watch video lectures on LLM fundamentals, prompt engineering, RAG, and agents.
-MOTIVATION ANGLE: Completing Phase I sets them up for Phase II where they will publish a research paper - a huge career boost in the AI field.`
+  ? `In Phase I, students watch video lectures on Julia, ODEs, PDEs, Neural Networks, PINNs, Neural ODEs, and UDEs.
+MOTIVATION ANGLE: Completing Phase I sets them up for Phase II where they will publish a research paper - a huge career boost in the Scientific ML field.`
   : `In Phase II, students work on a research project.${student.researchTopic ? ` Their topic is: ${student.researchTopic}` : ' They have not selected a topic yet.'}
-MOTIVATION ANGLE: Their research can become a published paper that significantly enhances their career and credibility in the GenAI space.`
+MOTIVATION ANGLE: Their research can become a published paper that significantly enhances their career and credibility in the Scientific ML space.`
 }
 ${conversationContext}
 

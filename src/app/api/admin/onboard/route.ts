@@ -107,15 +107,13 @@ export async function POST(request: NextRequest) {
     // Generate welcome message using preferred name
     const welcomeMessage = `Hello ${displayName},
 
-Welcome to the GenAI Industry Professional Plan!
-
-Please watch the onboarding video: https://www.veed.io/view/6f40e098-5f2c-4f7f-8b0b-a614e3c556cc?panel=share
+Welcome to the SciML Bootcamp!
 
 Here are the next steps to be followed:
 
-(a) Go to: https://flyvidesh.online/courses/llm-bootcamp-industry-professional-plan/. We have activated the Industry Plan for you now.
+(a) Go to your dashboard at https://flyvidesh.online/ml-bootcamp. We have activated the SciML Bootcamp for you now.
 
-(b) We will allocate 1-1.5 months for you to go through the course videos and code files. You can start going through the modules sequentially.
+(b) We will allocate 1-1.5 months for you to go through the course videos and assignments. You can start going through the modules sequentially.
 
 (c) Whenever you face any doubts or queries, ask here. We will respond immediately. We won't be having voice or video calls. Hence, it is very important that you are very proactive on email.
 
@@ -125,7 +123,11 @@ This is a 4 month mentorship from ${formatDate(startDate)} - ${formatDate(endDat
 
 Let's get started!
 
-Let me know if you have any doubts or questions!`;
+Let me know if you have any doubts or questions!
+
+Best regards,
+Dr. Raj Dandekar,
+MIT PhD`;
 
     // Create welcome message as sent (auto-approved, no mentor review needed)
     const { error: msgError } = await supabase.from('messages').insert({

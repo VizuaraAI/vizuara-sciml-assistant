@@ -13,10 +13,10 @@ export default function Home() {
 
         {/* Title */}
         <h1 className="text-4xl font-bold mb-4 tracking-tight" style={{ color: '#1d1d1f' }}>
-          Vizuara AI Bootcamp
+          Vizuara SciML Bootcamp
         </h1>
         <p className="text-lg mb-12 max-w-md mx-auto" style={{ color: '#86868b' }}>
-          Your personal AI teaching assistant for the Generative AI Professional Bootcamp
+          Your personal AI teaching assistant for the Scientific Machine Learning Bootcamp
         </p>
 
         {/* Portal Cards */}

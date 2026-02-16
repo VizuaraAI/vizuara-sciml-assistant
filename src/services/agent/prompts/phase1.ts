@@ -30,14 +30,16 @@ ${profile.daysInCurrentPhase > 42 ? '⚠️ Student has been in Phase I for over
 5. **Phase II preparation:** After ~6 weeks or 70%+ progress, start discussing Phase II and research interests.
 
 ## Video Curriculum Topics
-1. LLM Foundations and Hands-on Projects (9 lessons)
-2. Prompt Engineering (3 lessons)
-3. Agents and LangChain (5 lessons)
-4. Semantic Search (5 lessons)
-5. RAG (4 lessons)
-6. Multimodal LLMs (4 lessons)
+1. Introduction to Scientific Machine Learning (SciML) - Course overview, traditional ML vs SciML, problems solved by SciML
+2. Julia Programming Language - Installation, basics, why Julia for scientific computing
+3. Ordinary Differential Equations (ODEs) in Julia - What are ODEs, building ODEs hands-on
+4. Partial Differential Equations (PDEs) in Julia - What are PDEs, building PDEs hands-on
+5. Neural Networks, Gradient Descent & Backpropagation - Weights, biases, activation functions, optimization
+6. Physics-Informed Neural Networks (PINNs) - Theory and practical implementation in Julia
+7. Neural ODEs - Theory, the 3 pillars of SciML, practical implementation
+8. Universal Differential Equations (UDEs) - Theory and practical implementation in Julia
 
-When answering questions, reference the specific topic and lesson when possible (e.g., "This is covered in Topic 3, Lesson 2 on LangChain chains").
+When answering questions, reference the specific topic when possible (e.g., "This is covered in Topic 6 on Physics-Informed Neural Networks").
 `;
 }
 
@@ -93,14 +95,14 @@ It's been ${daysSinceLastInteraction} days since this student's last message. Th
  */
 export function getTopicContext(currentTopicIndex: number): string {
   const topicContexts: Record<number, string> = {
-    1: 'Student is learning LLM fundamentals — focus on building intuition about how LLMs work, tokenization, and basic hands-on projects.',
-    2: 'Student is on Prompt Engineering — emphasize practical prompting techniques, chain-of-thought, and guardrails.',
-    3: 'Student is learning Agents and LangChain — help with understanding chains, memory, and building agents.',
-    4: 'Student is on Semantic Search — focus on embeddings, dense retrieval, and chunking strategies.',
-    5: 'Student is learning RAG — emphasize evaluation, retrieval quality, and advanced RAG patterns.',
-    6: 'Student is on Multimodal LLMs — help with vision models, CLIP, BLIP, and multimodal applications.',
-    7: 'Student is nearing completion — review concepts and prepare for Phase II transition.',
-    8: 'Student has completed the curriculum — focus on Phase II transition and research topic selection.',
+    1: 'Student is learning SciML fundamentals — focus on building intuition about Scientific ML, traditional ML vs SciML, and the problems SciML can solve.',
+    2: 'Student is on Julia Programming — help with installation, basics of Julia, and why Julia is powerful for scientific computing.',
+    3: 'Student is learning ODEs in Julia — focus on understanding differential equations and hands-on ODE implementation.',
+    4: 'Student is on PDEs in Julia — help with partial differential equations and practical PDE implementation.',
+    5: 'Student is learning Neural Networks basics — emphasize weights, biases, activation functions, gradient descent, and backpropagation.',
+    6: 'Student is on Physics-Informed Neural Networks (PINNs) — focus on PINN theory and practical implementation in Julia.',
+    7: 'Student is learning Neural ODEs — help with the 3 pillars of SciML and Neural ODE implementation.',
+    8: 'Student is on Universal Differential Equations (UDEs) — focus on UDE theory, implementation, and applications. Prepare for Phase II transition.',
   };
 
   return topicContexts[currentTopicIndex] || '';

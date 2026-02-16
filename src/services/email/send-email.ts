@@ -22,11 +22,11 @@ export async function sendWelcomeEmail({
   email,
   password,
 }: WelcomeEmailParams): Promise<{ success: boolean; error?: string }> {
-  const loginUrl = 'https://vizuara-genai-assistant-production.up.railway.app/student';
+  const loginUrl = 'https://vizuara-sciml-assistant-production.up.railway.app/student';
 
   const emailContent = `Hello ${preferredName}!
 
-Let us get started with the Generative AI Bootcamp.
+Let us get started with the Scientific ML Bootcamp.
 
 Login here: ${loginUrl}
 
@@ -38,7 +38,7 @@ When you log in to this website, you will already see an onboarding email with t
 Let us get started.
 
 Best regards,
-Dr Raj Dandekar`;
+Dr. Raj Dandekar`;
 
   const BREVO_API_KEY = process.env.BREVO_API_KEY;
   const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'raj@vizuara.com';
@@ -71,7 +71,7 @@ Dr Raj Dandekar`;
             name: preferredName,
           },
         ],
-        subject: "Let's get started with the Generative AI Bootcamp.",
+        subject: "Let's get started with the Scientific ML Bootcamp.",
         textContent: emailContent,
       }),
     });

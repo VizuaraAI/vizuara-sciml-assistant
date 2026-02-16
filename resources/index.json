@@ -1,12 +1,21 @@
 {
-  "last_updated": "2026-02-11T00:00:00.000Z",
+  "last_updated": "2026-02-16T00:00:00.000Z",
   "summary": {
     "total_files": 12,
     "phase1_videos": {
       "count": 1,
-      "total_lessons": 35,
-      "total_hours": "16 hrs 49 min",
-      "total_topics": 8
+      "total_topics": 8,
+      "duration": "4-6 weeks",
+      "topics_list": [
+        "Introduction to Scientific Machine Learning",
+        "Julia Programming Language",
+        "Running ODEs in Julia",
+        "Running PDEs in Julia",
+        "Neural Networks, Gradient Descent & Backpropagation",
+        "Physics-Informed Neural Networks (PINNs)",
+        "Neural ODEs",
+        "Universal Differential Equations (UDEs)"
+      ]
     },
     "phase1_voice_notes": {
       "count": 1,
@@ -22,8 +31,15 @@
     },
     "phase2_topics": {
       "count": 1,
-      "categories": 11,
-      "subtopics": 43
+      "categories": 5,
+      "subtopics": 22,
+      "category_list": [
+        "Physics-Informed Neural Networks (PINNs)",
+        "Universal Differential Equations (UDEs)",
+        "Neural ODEs",
+        "Bayesian Neural ODEs",
+        "SciML + LLMs"
+      ]
     },
     "phase2_voice_notes": {
       "count": 1,
@@ -49,18 +65,19 @@
       "path": "resources/phase1-videos/video-catalog.md",
       "type": "markdown",
       "category": "phase1-videos",
-      "title": "Course Curriculum",
+      "title": "Scientific ML Course Curriculum",
       "metadata": {
         "topics": 8,
-        "lessons": 35,
-        "duration": "16 hrs 49 min",
+        "duration": "4-6 weeks",
         "topics_list": [
-          "LLM Foundations and Hands on Projects",
-          "Prompt Engineering",
-          "Agents and Langchain",
-          "Semantic Search",
-          "Retrieval Augmented Generation (RAG)",
-          "Multimodal LLMs"
+          "Introduction to Scientific Machine Learning",
+          "Julia Programming Language",
+          "Running ODEs in Julia",
+          "Running PDEs in Julia",
+          "Neural Networks, Gradient Descent & Backpropagation",
+          "Physics-Informed Neural Networks (PINNs)",
+          "Neural ODEs",
+          "Universal Differential Equations (UDEs)"
         ]
       }
     },
@@ -120,22 +137,16 @@
       "path": "resources/phase2-topics/topics.md",
       "type": "markdown",
       "category": "phase2-topics",
-      "title": "Proposed Research & Project Topics",
+      "title": "SciML Research & Project Topics",
       "metadata": {
-        "categories": 11,
-        "subtopics": 43,
+        "categories": 5,
+        "subtopics": 22,
         "category_list": [
-          "Healthcare & Biomedical AI",
-          "Finance & Business Intelligence",
-          "Education & Adaptive Learning",
-          "Agentic AI & Multi-Agent Systems",
-          "Creative & Entertainment AI",
-          "Legal & Governance",
-          "Multimodal & Frontier AI Applications",
-          "AI Safety, Evaluation & Responsible AI",
-          "Infrastructure & Production Systems",
-          "Domain-Specific Applied AI",
-          "Emerging & Frontier Topics"
+          "Physics-Informed Neural Networks (PINNs)",
+          "Universal Differential Equations (UDEs)",
+          "Neural ODEs",
+          "Bayesian Neural ODEs",
+          "SciML + LLMs"
         ]
       }
     },
