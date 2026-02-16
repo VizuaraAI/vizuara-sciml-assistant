@@ -546,10 +546,63 @@ async function callGeminiStreaming(
 
 function parseJSON(text: string): any {
   let cleaned = text.trim();
+
+  // Remove markdown code blocks
   if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
   else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
   if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
-  return JSON.parse(cleaned.trim());
+  cleaned = cleaned.trim();
+
+  // Try to find JSON object boundaries
+  const jsonStart = cleaned.indexOf('{');
+  const jsonEnd = cleaned.lastIndexOf('}');
+
+  if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+    cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+  }
+
+  // Fix common JSON issues from LLM output
+  // 1. Fix truncated strings (remove incomplete key-value pairs at the end)
+  // 2. Fix missing quotes
+  // 3. Handle control characters
+  cleaned = cleaned
+    .replace(/[\x00-\x1F\x7F]/g, ' ')  // Replace control chars with space
+    .replace(/,\s*}/g, '}')  // Remove trailing commas before }
+    .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
+    .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');  // Add quotes to unquoted keys
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    // If parsing fails, try to extract valid JSON by finding balanced braces
+    console.error('JSON parse error, attempting recovery:', e);
+
+    // Try progressively shorter versions (in case of truncation)
+    let braceCount = 0;
+    let lastValidEnd = -1;
+
+    for (let i = 0; i < cleaned.length; i++) {
+      if (cleaned[i] === '{') braceCount++;
+      else if (cleaned[i] === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          lastValidEnd = i;
+          break;
+        }
+      }
+    }
+
+    if (lastValidEnd > 0) {
+      const truncated = cleaned.substring(0, lastValidEnd + 1);
+      try {
+        return JSON.parse(truncated);
+      } catch (e2) {
+        console.error('Recovery also failed:', e2);
+      }
+    }
+
+    throw new Error(`Failed to parse roadmap JSON: ${e instanceof Error ? e.message : 'Unknown error'}`);
+  }
 }
 
 // Sanitize text to replace Unicode characters with ASCII equivalents
