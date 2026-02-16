@@ -124,14 +124,6 @@ The key paper is Chen et al. (2018) 'Neural Ordinary Differential Equations'. Wh
 2. Adaptive computation: The ODE solver decides how many 'layers' to use
 3. Continuous-time modeling: Perfect for irregularly-sampled time series
 
-Here's the basic idea in code:
-```julia
-using DifferentialEquations
-neural_ode(u, p, t) = nn(u, p)  # nn is your neural network
-prob = ODEProblem(neural_ode, u0, tspan, p)
-solve(prob, Tsit5())
-```
-
 You'll dive deeper into this in Topic 5 of the curriculum, but the intuition above is what you need to grasp first."
 
 IMPORTANT:
