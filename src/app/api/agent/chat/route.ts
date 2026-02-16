@@ -501,12 +501,22 @@ export async function POST(request: NextRequest) {
       .eq('role', 'agent')
       .eq('status', 'draft');
 
+    // Extract subject from student message for proper threading
+    let subject = 'General Question';
+    if (message.startsWith('Subject:')) {
+      const firstLine = message.split('\n')[0];
+      subject = firstLine.replace('Subject:', '').trim();
+    }
+
+    // Prepend subject to agent response for proper threading
+    const contentWithSubject = `Subject: ${subject}\n\n${finalContent || "I received your message and I'm thinking about how to best respond."}`;
+
     // Save agent response as draft (student message was already saved at the start)
     await supabase.from('messages').insert({
       id: draftId,
       conversation_id: conversation.id,
       role: 'agent',
-      content: finalContent || "I received your message and I'm thinking about how to best respond.",
+      content: contentWithSubject,
       tool_calls: allToolCalls.length > 0 ? allToolCalls : null,
       status: 'draft',
     });

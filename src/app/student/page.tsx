@@ -169,39 +169,35 @@ export default function StudentInboxPage() {
       (a, b) => parseTimestamp(a.timestamp).getTime() - parseTimestamp(b.timestamp).getTime()
     );
 
-    const threads: Thread[] = [];
-    let currentThread: Message[] = [];
-    let currentSubject = '';
+    // Group messages by subject into threads
+    const threadMap = new Map<string, Message[]>();
 
     for (const msg of sorted) {
-      if (msg.role === 'student') {
-        // Student message - check if it starts a new thread
-        const subject = extractSubject(msg.content);
-        const isNewThread = subject !== currentSubject || currentThread.length === 0;
+      const subject = extractSubject(msg.content);
+      const normalizedSubject = subject.toLowerCase().trim();
 
-        if (isNewThread && currentThread.length > 0) {
-          // Save previous thread
-          threads.push(createThread(currentThread, currentSubject));
-          currentThread = [];
+      // Find existing thread with matching subject
+      let foundKey: string | null = null;
+      for (const [key] of threadMap) {
+        if (key.toLowerCase().trim() === normalizedSubject) {
+          foundKey = key;
+          break;
         }
+      }
 
-        currentSubject = subject;
-        currentThread.push(msg);
+      if (foundKey) {
+        threadMap.get(foundKey)!.push(msg);
       } else {
-        // Agent response - add to current thread
-        if (currentThread.length > 0) {
-          currentThread.push(msg);
-        } else {
-          // Orphan agent message - create its own thread
-          currentThread = [msg];
-          currentSubject = extractSubject(msg.content);
-        }
+        threadMap.set(subject, [msg]);
       }
     }
 
-    // Don't forget the last thread
-    if (currentThread.length > 0) {
-      threads.push(createThread(currentThread, currentSubject));
+    // Convert map to thread array
+    const threads: Thread[] = [];
+    for (const [subject, msgs] of threadMap) {
+      if (msgs.length > 0) {
+        threads.push(createThread(msgs, subject));
+      }
     }
 
     // Sort threads by most recent message (newest first)
@@ -241,9 +237,17 @@ export default function StudentInboxPage() {
     return content;
   }
 
-  function parseTimestamp(timestamp: string): Date {
+  function parseTimestamp(timestamp: string | null | undefined): Date {
+    if (!timestamp) {
+      return new Date(); // Return current date if timestamp is missing
+    }
     const ts = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
-    return new Date(ts);
+    const date = new Date(ts);
+    // Check if date is valid, return current date if not
+    if (isNaN(date.getTime())) {
+      return new Date();
+    }
+    return date;
   }
 
   function formatDate(date: Date): string {
