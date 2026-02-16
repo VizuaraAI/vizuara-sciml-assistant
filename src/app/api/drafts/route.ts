@@ -155,8 +155,26 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        // Fetch original message to preserve the subject
+        const { data: originalMsg } = await supabase
+          .from('messages')
+          .select('content')
+          .eq('id', draftId)
+          .single();
+
+        // Extract subject from original content and prepend to edited content
+        let finalContent = content;
+        if (originalMsg?.content?.startsWith('Subject:')) {
+          const firstLine = originalMsg.content.split('\n')[0];
+          const subject = firstLine; // Keep full "Subject: xyz" line
+          // Only add subject if the edited content doesn't already have one
+          if (!content.startsWith('Subject:')) {
+            finalContent = `${subject}\n\n${content}`;
+          }
+        }
+
         // Update content and approve, include attachments if provided
-        const updateData: any = { content, status: 'approved' };
+        const updateData: any = { content: finalContent, status: 'approved' };
         if (attachments && attachments.length > 0) {
           updateData.attachments = attachments;
           console.log(`[Drafts API] Adding ${attachments.length} attachment(s) to edited message`);
