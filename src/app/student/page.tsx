@@ -178,9 +178,10 @@ export default function StudentInboxPage() {
 
       // Find existing thread with matching subject
       let foundKey: string | null = null;
-      for (const [key] of threadMap) {
-        if (key.toLowerCase().trim() === normalizedSubject) {
-          foundKey = key;
+      const keys = Array.from(threadMap.keys());
+      for (let i = 0; i < keys.length; i++) {
+        if (keys[i].toLowerCase().trim() === normalizedSubject) {
+          foundKey = keys[i];
           break;
         }
       }
@@ -194,11 +195,11 @@ export default function StudentInboxPage() {
 
     // Convert map to thread array
     const threads: Thread[] = [];
-    for (const [subject, msgs] of threadMap) {
+    threadMap.forEach((msgs, subject) => {
       if (msgs.length > 0) {
         threads.push(createThread(msgs, subject));
       }
-    }
+    });
 
     // Sort threads by most recent message (newest first)
     threads.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
