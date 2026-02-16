@@ -1155,13 +1155,21 @@ export default function MentorInboxPage() {
     }
   }
 
-  // Parse timestamp as UTC
-  function parseTimestamp(timestamp: string): Date {
-    const utcTimestamp = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
-    return new Date(utcTimestamp);
+  // Parse timestamp as UTC with null safety
+  function parseTimestamp(timestamp: string | null | undefined): Date {
+    if (!timestamp) {
+      return new Date(); // Return current date if timestamp is missing
+    }
+    const ts = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
+    const date = new Date(ts);
+    // Check if date is valid, return current date if not
+    if (isNaN(date.getTime())) {
+      return new Date();
+    }
+    return date;
   }
 
-  function formatDate(timestamp: string) {
+  function formatDate(timestamp: string | null | undefined) {
     const date = parseTimestamp(timestamp);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
@@ -1177,7 +1185,7 @@ export default function MentorInboxPage() {
     }
   }
 
-  function formatFullDate(timestamp: string) {
+  function formatFullDate(timestamp: string | null | undefined) {
     const date = parseTimestamp(timestamp);
     return date.toLocaleDateString(undefined, {
       weekday: 'long',
