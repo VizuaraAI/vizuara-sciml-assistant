@@ -66,6 +66,7 @@ export default function MentorInboxPage() {
   const [roadmapTopic, setRoadmapTopic] = useState('');
   const [colabQuestion, setColabQuestion] = useState('');
   const [composeMessage, setComposeMessage] = useState('');
+  const [composeSubject, setComposeSubject] = useState('');
   const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false);
   const [isGeneratingColab, setIsGeneratingColab] = useState(false);
   const [isSendingDirect, setIsSendingDirect] = useState(false);
@@ -726,12 +727,16 @@ export default function MentorInboxPage() {
 
     setIsSendingDirect(true);
     try {
+      // Include subject for proper threading
+      const subject = composeSubject.trim() || 'Message from Dr. Raj';
+      const fullContent = `Subject: ${subject}\n\n${composeMessage.trim()}`;
+
       const res = await fetch('/api/mentor/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentId: selectedStudent.id,
-          content: composeMessage.trim(),
+          content: fullContent,
         }),
       });
 
@@ -740,6 +745,7 @@ export default function MentorInboxPage() {
       if (data.success) {
         setShowComposeModal(false);
         setComposeMessage('');
+        setComposeSubject('');
         alert('Message sent successfully!');
 
         // Refresh messages
@@ -1071,12 +1077,17 @@ export default function MentorInboxPage() {
         });
       }
 
+      // IMPORTANT: Include thread subject for proper threading
+      // Without this, the message creates a new thread instead of staying in the same one
+      const threadSubject = selectedThread?.subject || 'General Message';
+      const fullMessageContent = `Subject: ${threadSubject}\n\n${messageContent}`;
+
       const res = await fetch('/api/mentor/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentId: selectedStudent.id,
-          content: messageContent,
+          content: fullMessageContent,
           attachments: uploadedFiles,
         }),
       });
@@ -2728,6 +2739,7 @@ export default function MentorInboxPage() {
                   onClick={() => {
                     setShowComposeModal(false);
                     setComposeMessage('');
+                    setComposeSubject('');
                   }}
                   className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
                 >
@@ -2750,6 +2762,7 @@ export default function MentorInboxPage() {
                 onClick={() => {
                   setShowComposeModal(false);
                   setComposeMessage('');
+                  setComposeSubject('');
                   if (selectedStudent) transitionToPhase2(selectedStudent.id);
                 }}
                 disabled={isTransitioning || selectedStudent?.currentPhase === 'phase2'}
@@ -2770,6 +2783,7 @@ export default function MentorInboxPage() {
                 onClick={() => {
                   setShowComposeModal(false);
                   setComposeMessage('');
+                  setComposeSubject('');
                   acceptRoadmap();
                 }}
                 disabled={isAcceptingRoadmap || selectedStudent?.currentPhase !== 'phase2' || contextData?.contextSummary?.roadmapAccepted}
@@ -2790,6 +2804,7 @@ export default function MentorInboxPage() {
                 onClick={() => {
                   setShowComposeModal(false);
                   setComposeMessage('');
+                  setComposeSubject('');
                   setShowRoadmapModal(true);
                 }}
                 disabled={contextData?.contextSummary?.roadmapAccepted}
@@ -2810,6 +2825,7 @@ export default function MentorInboxPage() {
                 onClick={() => {
                   setShowComposeModal(false);
                   setComposeMessage('');
+                  setComposeSubject('');
                   setShowColabModal(true);
                 }}
                 className="px-3 py-1.5 bg-orange-100 text-orange-700 text-xs font-medium rounded-lg hover:bg-orange-200 transition-colors flex items-center gap-1.5"
@@ -2825,6 +2841,7 @@ export default function MentorInboxPage() {
                 onClick={() => {
                   setShowComposeModal(false);
                   setComposeMessage('');
+                  setComposeSubject('');
                   findConferences();
                 }}
                 disabled={!contextData?.contextSummary?.roadmapAccepted}
@@ -2841,19 +2858,33 @@ export default function MentorInboxPage() {
               </button>
             </div>
 
-            <div className="p-6">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Your Message
-              </label>
-              <textarea
-                value={composeMessage}
-                onChange={(e) => setComposeMessage(e.target.value)}
-                placeholder="Type your message here..."
-                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent text-slate-800 placeholder-slate-400 resize-none"
-                rows={6}
-                autoFocus
-              />
-              <p className="text-xs text-slate-400 mt-2">
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Subject
+                </label>
+                <input
+                  type="text"
+                  value={composeSubject}
+                  onChange={(e) => setComposeSubject(e.target.value)}
+                  placeholder="e.g., Research Progress Check-in"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent text-slate-800 placeholder-slate-400"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Your Message
+                </label>
+                <textarea
+                  value={composeMessage}
+                  onChange={(e) => setComposeMessage(e.target.value)}
+                  placeholder="Type your message here..."
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent text-slate-800 placeholder-slate-400 resize-none"
+                  rows={6}
+                />
+              </div>
+              <p className="text-xs text-slate-400">
                 This message will be sent directly to the student without AI generation.
               </p>
             </div>
@@ -2862,6 +2893,7 @@ export default function MentorInboxPage() {
                 onClick={() => {
                   setShowComposeModal(false);
                   setComposeMessage('');
+                  setComposeSubject('');
                 }}
                 className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
               >
